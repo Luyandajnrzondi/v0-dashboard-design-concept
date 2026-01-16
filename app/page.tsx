@@ -8,7 +8,7 @@ import { MobileSidebar } from "@/components/dashboard/mobile-sidebar"
 import { ImageGrid } from "@/components/dashboard/image-grid"
 import { FitnessView } from "@/components/dashboard/fitness-view"
 import { FinanceView } from "@/components/dashboard/finance-view"
-import type { Category, Item, ItemMetadata, WorkoutLog, Transaction, Budget, FinancialGoal } from "@/lib/types"
+import type { Category, Item, ItemMetadata, WorkoutLog, Transaction, Budget, SavingsGoal } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 const supabase = createClient()
@@ -47,7 +47,7 @@ const fetchBudgets = async (): Promise<Budget[]> => {
   return data || []
 }
 
-const fetchFinancialGoals = async (): Promise<FinancialGoal[]> => {
+const fetchSavingsGoals = async (): Promise<SavingsGoal[]> => {
   const { data, error } = await supabase.from("savings_goals").select("*").order("target_date", { ascending: true })
   if (error) throw error
   return data || []
@@ -76,10 +76,10 @@ export default function DashboardPage() {
   } = useSWR("transactions", fetchTransactions)
   const { data: budgets = [], error: budgetsError, isLoading: budgetsLoading } = useSWR("budgets", fetchBudgets)
   const {
-    data: financialGoals = [],
+    data: savingsGoals = [],
     error: goalsError,
     isLoading: goalsLoading,
-  } = useSWR("financial_goals", fetchFinancialGoals)
+  } = useSWR("savings_goals", fetchSavingsGoals)
 
   // Subscribe to realtime updates
   useEffect(() => {
@@ -121,7 +121,7 @@ export default function DashboardPage() {
     const goalsChannel = supabase
       .channel("goals-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "savings_goals" }, () => {
-        mutate("financial_goals")
+        mutate("savings_goals")
       })
       .subscribe()
 
@@ -217,6 +217,40 @@ export default function DashboardPage() {
     mutate("items")
   }, [])
 
+  const handleChangeImage = useCallback(async (id: string, file: File) => {
+    // Get the current item to find the old image URL
+    const { data: currentItem } = await supabase.from("items").select("image_url").eq("id", id).single()
+
+    // Upload new image
+    const fileExt = file.name.split(".").pop()
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+    const filePath = `${fileName}`
+
+    const { error: uploadError } = await supabase.storage.from("dashboard-images").upload(filePath, file)
+    if (uploadError) throw uploadError
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("dashboard-images").getPublicUrl(filePath)
+
+    // Update the item with the new image URL
+    const { error } = await supabase
+      .from("items")
+      .update({ image_url: publicUrl, updated_at: new Date().toISOString() })
+      .eq("id", id)
+    if (error) throw error
+
+    // Delete the old image from storage
+    if (currentItem?.image_url) {
+      const match = currentItem.image_url.match(/dashboard-images\/(.+)$/)
+      if (match) {
+        await supabase.storage.from("dashboard-images").remove([match[1]])
+      }
+    }
+
+    mutate("items")
+  }, [])
+
   const handleAddWorkout = useCallback(async (workout: Omit<WorkoutLog, "id" | "created_at" | "updated_at">) => {
     const { error } = await supabase.from("workout_logs").insert(workout)
     if (error) throw error
@@ -283,25 +317,25 @@ export default function DashboardPage() {
     mutate("budgets")
   }, [])
 
-  const handleAddGoal = useCallback(async (goal: Omit<FinancialGoal, "id" | "created_at" | "updated_at">) => {
+  const handleAddSavingsGoal = useCallback(async (goal: Omit<SavingsGoal, "id" | "created_at" | "updated_at">) => {
     const { error } = await supabase.from("savings_goals").insert(goal)
     if (error) throw error
-    mutate("financial_goals")
+    mutate("savings_goals")
   }, [])
 
-  const handleUpdateGoal = useCallback(async (id: string, goal: Partial<FinancialGoal>) => {
+  const handleUpdateSavingsGoal = useCallback(async (id: string, goal: Partial<SavingsGoal>) => {
     const { error } = await supabase
       .from("savings_goals")
       .update({ ...goal, updated_at: new Date().toISOString() })
       .eq("id", id)
     if (error) throw error
-    mutate("financial_goals")
+    mutate("savings_goals")
   }, [])
 
-  const handleDeleteGoal = useCallback(async (id: string) => {
+  const handleDeleteSavingsGoal = useCallback(async (id: string) => {
     const { error } = await supabase.from("savings_goals").delete().eq("id", id)
     if (error) throw error
-    mutate("financial_goals")
+    mutate("savings_goals")
   }, [])
 
   const selectedCategory = selectedCategoryId ? categories.find((c) => c.id === selectedCategoryId) : null
@@ -373,16 +407,16 @@ export default function DashboardPage() {
             categoryId={selectedCategoryId}
             transactions={transactions.filter((t) => t.category_id === selectedCategoryId)}
             budgets={budgets.filter((b) => b.category_id === selectedCategoryId)}
-            goals={financialGoals.filter((g) => g.category_id === selectedCategoryId)}
+            savingsGoals={savingsGoals.filter((g) => g.category_id === selectedCategoryId)}
             onAddTransaction={handleAddTransaction}
             onUpdateTransaction={handleUpdateTransaction}
             onDeleteTransaction={handleDeleteTransaction}
             onAddBudget={handleAddBudget}
             onUpdateBudget={handleUpdateBudget}
             onDeleteBudget={handleDeleteBudget}
-            onAddGoal={handleAddGoal}
-            onUpdateGoal={handleUpdateGoal}
-            onDeleteGoal={handleDeleteGoal}
+            onAddSavingsGoal={handleAddSavingsGoal}
+            onUpdateSavingsGoal={handleUpdateSavingsGoal}
+            onDeleteSavingsGoal={handleDeleteSavingsGoal}
           />
         ) : isFitnessCategory && selectedCategoryId ? (
           <FitnessView
@@ -400,6 +434,7 @@ export default function DashboardPage() {
             onAddItem={handleAddItem}
             onUpdateItem={handleUpdateItem}
             onDeleteItem={handleDeleteItem}
+            onChangeImage={handleChangeImage}
             onItemFocused={setIsItemFocused}
           />
         )}
