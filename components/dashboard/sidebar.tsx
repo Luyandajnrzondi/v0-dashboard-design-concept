@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import type { SidebarProps } from "./types" // Declare SidebarProps import
 
 import { useState } from "react"
 import {
@@ -21,6 +22,7 @@ import {
   MapPin,
   Lightbulb,
   Briefcase,
+  Wallet,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -38,15 +40,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import type { Category } from "@/lib/types"
 
-interface SidebarProps {
-  categories: Category[]
-  selectedCategoryId: string | null
-  onSelectCategory: (id: string | null) => void
-  onAddCategory: (name: string) => Promise<void>
-  onDeleteCategory: (id: string) => Promise<void>
-  onUpdateCategory: (id: string, name: string) => Promise<void>
-}
-
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   folder: Folder,
   film: Film,
@@ -58,6 +51,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   "map-pin": MapPin,
   lightbulb: Lightbulb,
   briefcase: Briefcase,
+  wallet: Wallet, // Added wallet icon mapping for finance
 }
 
 export function Sidebar({

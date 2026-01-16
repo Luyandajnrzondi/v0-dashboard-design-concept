@@ -1,9 +1,9 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Image from "next/image"
-import { Plus, Trash2, Edit2, X, Upload, ImageIcon, Star } from "lucide-react"
+import { Plus, Trash2, Edit2, X, Upload, ImageIcon, Star, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -39,6 +39,7 @@ interface ImageGridProps {
   onAddItem: (categoryId: string, name: string, file: File, metadata?: ItemMetadata) => Promise<void>
   onUpdateItem: (id: string, name: string, metadata?: ItemMetadata) => Promise<void>
   onDeleteItem: (id: string, imageUrl: string) => Promise<void>
+  onChangeImage?: (id: string, file: File) => Promise<void>
   onItemFocused?: (focused: boolean) => void
 }
 
@@ -151,6 +152,7 @@ export function ImageGrid({
   onAddItem,
   onUpdateItem,
   onDeleteItem,
+  onChangeImage,
   onItemFocused,
 }: ImageGridProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -167,6 +169,8 @@ export function ImageGrid({
   const [editMetadata, setEditMetadata] = useState<ItemMetadata>({})
   const [isLoading, setIsLoading] = useState(false)
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
+  const [isChangingImage, setIsChangingImage] = useState(false)
+  const changeImageInputRef = useRef<HTMLInputElement>(null)
 
   const filteredItems = selectedCategoryId ? items.filter((item) => item.category_id === selectedCategoryId) : items
 
@@ -201,6 +205,21 @@ export function ImageGrid({
       const url = URL.createObjectURL(file)
       setPreviewUrl(url)
     }
+  }
+
+  const handleChangeImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file && selectedItem && onChangeImage) {
+      setIsChangingImage(true)
+      try {
+        await onChangeImage(selectedItem.id, file)
+        setDetailDialogOpen(false)
+        setSelectedItem(null)
+      } finally {
+        setIsChangingImage(false)
+      }
+    }
+    e.target.value = ""
   }
 
   const handleAddItem = async () => {
@@ -302,24 +321,26 @@ export function ImageGrid({
       onClick={() => handleItemClick(item)}
       onMouseEnter={() => setHoveredItem(item.id)}
       onMouseLeave={() => setHoveredItem(null)}
-      className="group relative aspect-square cursor-pointer overflow-hidden rounded-lg bg-muted"
+      className="group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-xl bg-muted"
     >
-      <div className="absolute inset-0 overflow-hidden">
+      <div
+        className={cn(
+          "absolute inset-0 transition-transform duration-500 ease-out",
+          hoveredItem === item.id && "scale-110",
+        )}
+      >
         <Image
           src={item.image_url || "/placeholder.svg"}
           alt={item.name}
           fill
-          className={cn(
-            "object-cover transition-transform duration-500 ease-out",
-            hoveredItem === item.id && "scale-110",
-          )}
+          className="object-cover"
           sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
         />
       </div>
 
       <div
         className={cn(
-          "absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent transition-opacity duration-300",
+          "absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent transition-opacity duration-300",
           hoveredItem === item.id ? "opacity-100" : "opacity-0",
         )}
       />
@@ -327,34 +348,34 @@ export function ImageGrid({
       {/* Action buttons on hover */}
       <div
         className={cn(
-          "absolute bottom-0 left-0 right-0 flex items-center justify-between p-3 transition-all duration-300",
+          "absolute bottom-0 left-0 right-0 flex items-center justify-between p-4 transition-all duration-300",
           hoveredItem === item.id ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0",
         )}
       >
         <span className="text-sm font-medium text-white truncate max-w-[60%]">{item.name}</span>
-        <div className="flex gap-1">
+        <div className="flex gap-1.5">
           <Button
             variant="secondary"
             size="icon"
-            className="h-7 w-7 bg-white/20 backdrop-blur-sm border-0 hover:bg-white/30"
+            className="h-8 w-8 bg-white/20 backdrop-blur-sm border-0 hover:bg-white/30"
             onClick={(e) => handleEditClick(item, e)}
           >
-            <Edit2 className="h-3.5 w-3.5 text-white" />
+            <Edit2 className="h-4 w-4 text-white" />
           </Button>
           <Button
             variant="secondary"
             size="icon"
-            className="h-7 w-7 bg-white/20 backdrop-blur-sm border-0 hover:bg-red-500/80"
+            className="h-8 w-8 bg-white/20 backdrop-blur-sm border-0 hover:bg-red-500/80"
             onClick={(e) => handleDeleteClick(item, e)}
           >
-            <Trash2 className="h-3.5 w-3.5 text-white" />
+            <Trash2 className="h-4 w-4 text-white" />
           </Button>
         </div>
       </div>
 
       {/* Rating badge */}
       {(item.metadata as any)?.rating && (
-        <div className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-black/50 backdrop-blur-sm px-2 py-1 text-xs font-medium text-white">
+        <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-black/50 backdrop-blur-sm px-2.5 py-1 text-xs font-medium text-white">
           <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
           {(item.metadata as any).rating}
         </div>
@@ -364,7 +385,7 @@ export function ImageGrid({
 
   return (
     <>
-      <div className="flex-1 overflow-auto p-4 md:p-6">
+      <div className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <div>
@@ -382,37 +403,37 @@ export function ImageGrid({
           </Button>
         </div>
 
-        {/* Grid */}
+        {/* Grid - Updated grid to 2 columns on mobile with larger gap */}
         {filteredItems.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16">
-            <ImageIcon className="mb-4 h-12 w-12 text-muted-foreground/50" />
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-20">
+            <ImageIcon className="mb-4 h-16 w-16 text-muted-foreground/50" />
             <p className="mb-2 text-lg font-medium text-foreground">No images yet</p>
             <p className="mb-4 text-sm text-muted-foreground text-center px-4">
               {categories.length === 0 ? "Create a category first, then add images" : "Upload images to get started"}
             </p>
             {categories.length > 0 && (
-              <Button onClick={openAddDialog}>
+              <Button onClick={openAddDialog} size="lg">
                 <Plus className="mr-2 h-4 w-4" />
                 Add your first image
               </Button>
             )}
           </div>
         ) : selectedCategoryId ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {filteredItems.map(renderItemCard)}
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-10">
             {groupedItems?.map(({ category, items: categoryItems }) => (
               <section key={category.id}>
-                <div className="mb-4 flex items-center gap-3">
+                <div className="mb-5 flex items-center gap-3">
                   <h2 className="text-lg font-semibold text-foreground">{category.name}</h2>
                   <div className="h-px flex-1 bg-border" />
                   <span className="text-sm text-muted-foreground">
                     {categoryItems.length} {categoryItems.length === 1 ? "item" : "items"}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                <div className="grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   {categoryItems.map(renderItemCard)}
                 </div>
               </section>
@@ -431,13 +452,34 @@ export function ImageGrid({
           </DialogHeader>
           {selectedItem && (
             <div className="grid gap-6 md:grid-cols-2">
-              <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
+              <div className="relative aspect-square overflow-hidden rounded-xl bg-muted group">
                 <Image
                   src={selectedItem.image_url || "/placeholder.svg"}
                   alt={selectedItem.name}
                   fill
                   className="object-cover"
                 />
+                {/* Change image button */}
+                {onChangeImage && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="secondary"
+                      onClick={() => changeImageInputRef.current?.click()}
+                      disabled={isChangingImage}
+                      className="bg-white/20 backdrop-blur-sm border-0 hover:bg-white/30"
+                    >
+                      <RefreshCw className={cn("mr-2 h-4 w-4", isChangingImage && "animate-spin")} />
+                      {isChangingImage ? "Changing..." : "Change Image"}
+                    </Button>
+                    <input
+                      ref={changeImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleChangeImageFile}
+                      className="hidden"
+                    />
+                  </div>
+                )}
               </div>
               <div className="space-y-4">
                 <div>
@@ -534,7 +576,7 @@ export function ImageGrid({
               <Label>Image</Label>
               <div className="flex flex-col items-center gap-4">
                 {previewUrl ? (
-                  <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-border">
+                  <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border">
                     <Image src={previewUrl || "/placeholder.svg"} alt="Preview" fill className="object-cover" />
                     <Button
                       variant="secondary"
@@ -550,7 +592,7 @@ export function ImageGrid({
                     </Button>
                   </div>
                 ) : (
-                  <label className="flex aspect-video w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-border transition-colors hover:border-primary/50">
+                  <label className="flex aspect-video w-full cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border transition-colors hover:border-primary/50">
                     <Upload className="mb-2 h-8 w-8 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">Click to upload</span>
                     <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />

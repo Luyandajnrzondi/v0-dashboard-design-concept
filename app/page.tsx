@@ -7,7 +7,8 @@ import { Sidebar } from "@/components/dashboard/sidebar"
 import { MobileSidebar } from "@/components/dashboard/mobile-sidebar"
 import { ImageGrid } from "@/components/dashboard/image-grid"
 import { FitnessView } from "@/components/dashboard/fitness-view"
-import type { Category, Item, ItemMetadata, WorkoutLog } from "@/lib/types"
+import { FinanceView } from "@/components/dashboard/finance-view"
+import type { Category, Item, ItemMetadata, WorkoutLog, Transaction, Budget, FinancialGoal } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 const supabase = createClient()
@@ -31,6 +32,24 @@ const fetchWorkoutLogs = async (): Promise<WorkoutLog[]> => {
   return data || []
 }
 
+const fetchTransactions = async (): Promise<Transaction[]> => {
+  const { data, error } = await supabase.from("transactions").select("*").order("date", { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+const fetchBudgets = async (): Promise<Budget[]> => {
+  const { data, error } = await supabase.from("budgets").select("*").order("created_at", { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+const fetchFinancialGoals = async (): Promise<FinancialGoal[]> => {
+  const { data, error } = await supabase.from("financial_goals").select("*").order("target_date", { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
 export default function DashboardPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
   const [isItemFocused, setIsItemFocused] = useState(false)
@@ -46,6 +65,18 @@ export default function DashboardPage() {
     error: workoutError,
     isLoading: workoutLoading,
   } = useSWR("workout_logs", fetchWorkoutLogs)
+
+  const {
+    data: transactions = [],
+    error: transactionsError,
+    isLoading: transactionsLoading,
+  } = useSWR("transactions", fetchTransactions)
+  const { data: budgets = [], error: budgetsError, isLoading: budgetsLoading } = useSWR("budgets", fetchBudgets)
+  const {
+    data: financialGoals = [],
+    error: goalsError,
+    isLoading: goalsLoading,
+  } = useSWR("financial_goals", fetchFinancialGoals)
 
   // Subscribe to realtime updates
   useEffect(() => {
@@ -70,12 +101,38 @@ export default function DashboardPage() {
       })
       .subscribe()
 
+    const transactionsChannel = supabase
+      .channel("transactions-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, () => {
+        mutate("transactions")
+      })
+      .subscribe()
+
+    const budgetsChannel = supabase
+      .channel("budgets-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "budgets" }, () => {
+        mutate("budgets")
+      })
+      .subscribe()
+
+    const goalsChannel = supabase
+      .channel("goals-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "financial_goals" }, () => {
+        mutate("financial_goals")
+      })
+      .subscribe()
+
     return () => {
       supabase.removeChannel(categoriesChannel)
       supabase.removeChannel(itemsChannel)
       supabase.removeChannel(workoutChannel)
+      supabase.removeChannel(transactionsChannel)
+      supabase.removeChannel(budgetsChannel)
+      supabase.removeChannel(goalsChannel)
     }
   }, [])
+
+  // ... existing code for category and item CRUD operations ...
 
   // Category CRUD operations
   const handleAddCategory = useCallback(async (name: string) => {
@@ -180,10 +237,81 @@ export default function DashboardPage() {
     mutate("workout_logs")
   }, [])
 
+  const handleAddTransaction = useCallback(
+    async (transaction: Omit<Transaction, "id" | "created_at" | "updated_at">) => {
+      const { error } = await supabase.from("transactions").insert(transaction)
+      if (error) throw error
+      mutate("transactions")
+    },
+    [],
+  )
+
+  const handleUpdateTransaction = useCallback(async (id: string, transaction: Partial<Transaction>) => {
+    const { error } = await supabase
+      .from("transactions")
+      .update({ ...transaction, updated_at: new Date().toISOString() })
+      .eq("id", id)
+    if (error) throw error
+    mutate("transactions")
+  }, [])
+
+  const handleDeleteTransaction = useCallback(async (id: string) => {
+    const { error } = await supabase.from("transactions").delete().eq("id", id)
+    if (error) throw error
+    mutate("transactions")
+  }, [])
+
+  const handleAddBudget = useCallback(async (budget: Omit<Budget, "id" | "created_at" | "updated_at">) => {
+    const { error } = await supabase.from("budgets").insert(budget)
+    if (error) throw error
+    mutate("budgets")
+  }, [])
+
+  const handleUpdateBudget = useCallback(async (id: string, budget: Partial<Budget>) => {
+    const { error } = await supabase
+      .from("budgets")
+      .update({ ...budget, updated_at: new Date().toISOString() })
+      .eq("id", id)
+    if (error) throw error
+    mutate("budgets")
+  }, [])
+
+  const handleDeleteBudget = useCallback(async (id: string) => {
+    const { error } = await supabase.from("budgets").delete().eq("id", id)
+    if (error) throw error
+    mutate("budgets")
+  }, [])
+
+  const handleAddGoal = useCallback(async (goal: Omit<FinancialGoal, "id" | "created_at" | "updated_at">) => {
+    const { error } = await supabase.from("financial_goals").insert(goal)
+    if (error) throw error
+    mutate("financial_goals")
+  }, [])
+
+  const handleUpdateGoal = useCallback(async (id: string, goal: Partial<FinancialGoal>) => {
+    const { error } = await supabase
+      .from("financial_goals")
+      .update({ ...goal, updated_at: new Date().toISOString() })
+      .eq("id", id)
+    if (error) throw error
+    mutate("financial_goals")
+  }, [])
+
+  const handleDeleteGoal = useCallback(async (id: string) => {
+    const { error } = await supabase.from("financial_goals").delete().eq("id", id)
+    if (error) throw error
+    mutate("financial_goals")
+  }, [])
+
   const selectedCategory = selectedCategoryId ? categories.find((c) => c.id === selectedCategoryId) : null
   const isFitnessCategory = selectedCategory?.type === "fitness"
+  const isFinanceCategory = selectedCategory?.type === "finance"
 
-  if (categoriesError || itemsError || workoutError) {
+  const hasError = categoriesError || itemsError || workoutError || transactionsError || budgetsError || goalsError
+  const isLoading =
+    categoriesLoading || itemsLoading || workoutLoading || transactionsLoading || budgetsLoading || goalsLoading
+
+  if (hasError) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-center">
@@ -194,7 +322,7 @@ export default function DashboardPage() {
     )
   }
 
-  if (categoriesLoading || itemsLoading || workoutLoading) {
+  if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -239,7 +367,23 @@ export default function DashboardPage() {
           <h1 className="text-lg font-semibold text-foreground">Dashboard</h1>
         </header>
 
-        {isFitnessCategory && selectedCategoryId ? (
+        {isFinanceCategory && selectedCategoryId ? (
+          <FinanceView
+            categoryId={selectedCategoryId}
+            transactions={transactions.filter((t) => t.category_id === selectedCategoryId)}
+            budgets={budgets.filter((b) => b.category_id === selectedCategoryId)}
+            goals={financialGoals.filter((g) => g.category_id === selectedCategoryId)}
+            onAddTransaction={handleAddTransaction}
+            onUpdateTransaction={handleUpdateTransaction}
+            onDeleteTransaction={handleDeleteTransaction}
+            onAddBudget={handleAddBudget}
+            onUpdateBudget={handleUpdateBudget}
+            onDeleteBudget={handleDeleteBudget}
+            onAddGoal={handleAddGoal}
+            onUpdateGoal={handleUpdateGoal}
+            onDeleteGoal={handleDeleteGoal}
+          />
+        ) : isFitnessCategory && selectedCategoryId ? (
           <FitnessView
             categoryId={selectedCategoryId}
             workoutLogs={workoutLogs.filter((w) => w.category_id === selectedCategoryId)}

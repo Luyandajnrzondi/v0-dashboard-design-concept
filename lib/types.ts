@@ -18,6 +18,7 @@ export type CategoryType =
   | "travel" // Travel & Places
   | "ideas" // Ideas, Inspiration & Notes
   | "career" // Career / Learning
+  | "finance" // New finance type
 
 export interface Item {
   id: string
@@ -137,6 +138,48 @@ export interface CareerMetadata extends BaseMetadata {
   feedback?: string
   portfolio_links?: string[]
   career_direction?: string
+}
+
+// Finance types
+export interface Transaction {
+  id: string
+  category_id: string
+  type: "income" | "expense" | "transfer"
+  amount: number
+  description: string
+  transaction_date: string
+  category_name?: string
+  payment_method?: string
+  is_recurring?: boolean
+  recurring_frequency?: string
+  tags?: string[]
+  notes?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Budget {
+  id: string
+  category_id: string
+  budget_category: string
+  amount: number
+  month: number
+  year: number
+  created_at: string
+  updated_at: string
+}
+
+export interface SavingsGoal {
+  id: string
+  category_id: string
+  name: string
+  target_amount: number
+  current_amount: number
+  target_date?: string
+  icon?: string
+  color?: string
+  created_at: string
+  updated_at: string
 }
 
 export type ItemMetadata =
