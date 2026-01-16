@@ -33,7 +33,10 @@ const fetchWorkoutLogs = async (): Promise<WorkoutLog[]> => {
 }
 
 const fetchTransactions = async (): Promise<Transaction[]> => {
-  const { data, error } = await supabase.from("transactions").select("*").order("date", { ascending: false })
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("*")
+    .order("transaction_date", { ascending: false })
   if (error) throw error
   return data || []
 }
@@ -45,7 +48,7 @@ const fetchBudgets = async (): Promise<Budget[]> => {
 }
 
 const fetchFinancialGoals = async (): Promise<FinancialGoal[]> => {
-  const { data, error } = await supabase.from("financial_goals").select("*").order("target_date", { ascending: true })
+  const { data, error } = await supabase.from("savings_goals").select("*").order("target_date", { ascending: true })
   if (error) throw error
   return data || []
 }
@@ -117,7 +120,7 @@ export default function DashboardPage() {
 
     const goalsChannel = supabase
       .channel("goals-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "financial_goals" }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "savings_goals" }, () => {
         mutate("financial_goals")
       })
       .subscribe()
@@ -131,8 +134,6 @@ export default function DashboardPage() {
       supabase.removeChannel(goalsChannel)
     }
   }, [])
-
-  // ... existing code for category and item CRUD operations ...
 
   // Category CRUD operations
   const handleAddCategory = useCallback(async (name: string) => {
@@ -283,14 +284,14 @@ export default function DashboardPage() {
   }, [])
 
   const handleAddGoal = useCallback(async (goal: Omit<FinancialGoal, "id" | "created_at" | "updated_at">) => {
-    const { error } = await supabase.from("financial_goals").insert(goal)
+    const { error } = await supabase.from("savings_goals").insert(goal)
     if (error) throw error
     mutate("financial_goals")
   }, [])
 
   const handleUpdateGoal = useCallback(async (id: string, goal: Partial<FinancialGoal>) => {
     const { error } = await supabase
-      .from("financial_goals")
+      .from("savings_goals")
       .update({ ...goal, updated_at: new Date().toISOString() })
       .eq("id", id)
     if (error) throw error
@@ -298,7 +299,7 @@ export default function DashboardPage() {
   }, [])
 
   const handleDeleteGoal = useCallback(async (id: string) => {
-    const { error } = await supabase.from("financial_goals").delete().eq("id", id)
+    const { error } = await supabase.from("savings_goals").delete().eq("id", id)
     if (error) throw error
     mutate("financial_goals")
   }, [])
