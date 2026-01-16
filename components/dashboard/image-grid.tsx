@@ -1,9 +1,9 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import Image from "next/image"
-import { Plus, Trash2, Edit2, X, Upload, ImageIcon, Star, RefreshCw, Camera } from "lucide-react"
+import { Plus, Trash2, Edit2, X, Upload, ImageIcon, Star, RefreshCw, Camera, ArrowUpDown, Filter } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -28,6 +28,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Badge } from "@/components/ui/badge"
 import type { Item, Category, ItemMetadata, CategoryType, SchemaField } from "@/lib/types"
 import { CATEGORY_SCHEMAS } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -42,6 +51,8 @@ interface ImageGridProps {
   onChangeImage?: (id: string, file: File) => Promise<void>
   onItemFocused?: (focused: boolean) => void
 }
+
+type SortOption = "name" | "rating" | "year" | "date_added"
 
 function RatingStars({
   value,
@@ -171,11 +182,60 @@ export function ImageGrid({
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
   const [isChangingImage, setIsChangingImage] = useState(false)
   const changeImageInputRef = useRef<HTMLInputElement>(null)
-  const cardChangeImageRef = useRef<HTMLInputElement>(null)
 
-  const filteredItems = selectedCategoryId ? items.filter((item) => item.category_id === selectedCategoryId) : items
+  const [sortBy, setSortBy] = useState<SortOption>("date_added")
+  const [filterByMetadata, setFilterByMetadata] = useState<{ key: string; value: string } | null>(null)
 
   const selectedCategory = selectedCategoryId ? categories.find((c) => c.id === selectedCategoryId) : null
+
+  const supportsSorting = selectedCategory?.type === "media" || selectedCategory?.type === "music"
+
+  const baseFilteredItems = useMemo(() => {
+    let filtered = selectedCategoryId ? items.filter((item) => item.category_id === selectedCategoryId) : items
+
+    if (filterByMetadata) {
+      filtered = filtered.filter((item) => {
+        const metadata = item.metadata as any
+        const value = metadata?.[filterByMetadata.key]
+        if (typeof value === "string") {
+          return value.toLowerCase() === filterByMetadata.value.toLowerCase()
+        }
+        return false
+      })
+    }
+
+    return filtered
+  }, [items, selectedCategoryId, filterByMetadata])
+
+  const filteredItems = useMemo(() => {
+    const sorted = [...baseFilteredItems]
+
+    switch (sortBy) {
+      case "name":
+        sorted.sort((a, b) => a.name.localeCompare(b.name))
+        break
+      case "rating":
+        sorted.sort((a, b) => {
+          const ratingA = (a.metadata as any)?.rating || 0
+          const ratingB = (b.metadata as any)?.rating || 0
+          return ratingB - ratingA
+        })
+        break
+      case "year":
+        sorted.sort((a, b) => {
+          const yearA = (a.metadata as any)?.year || 0
+          const yearB = (b.metadata as any)?.year || 0
+          return yearB - yearA
+        })
+        break
+      case "date_added":
+      default:
+        sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        break
+    }
+
+    return sorted
+  }, [baseFilteredItems, sortBy])
 
   const groupedItems = !selectedCategoryId
     ? categories.reduce(
@@ -303,6 +363,15 @@ export function ImageGrid({
     setDetailDialogOpen(true)
   }
 
+  const handleMetadataClick = (key: string, value: string) => {
+    setFilterByMetadata({ key, value })
+    setDetailDialogOpen(false)
+  }
+
+  const clearFilter = () => {
+    setFilterByMetadata(null)
+  }
+
   const openAddDialog = () => {
     setNewItemCategory(selectedCategoryId || (categories[0]?.id ?? ""))
     setNewItemMetadata({})
@@ -329,17 +398,21 @@ export function ImageGrid({
     return String(value)
   }
 
+  const isClickableMetadata = (key: string) => {
+    return ["director", "artist", "genre"].includes(key)
+  }
+
   const renderItemCard = (item: Item) => (
     <div
       key={item.id}
       onClick={() => handleItemClick(item)}
       onMouseEnter={() => setHoveredItem(item.id)}
       onMouseLeave={() => setHoveredItem(null)}
-      className="group relative aspect-[4/3] cursor-pointer overflow-hidden rounded-2xl bg-muted"
+      className="group relative aspect-[3/4] cursor-pointer overflow-hidden rounded-2xl bg-muted"
     >
       <div
         className={cn(
-          "absolute inset-0 transition-transform duration-500 ease-out",
+          "absolute inset-0 transition-transform duration-700 ease-out",
           hoveredItem === item.id && "scale-110",
         )}
       >
@@ -354,7 +427,7 @@ export function ImageGrid({
 
       <div
         className={cn(
-          "absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent transition-opacity duration-300",
+          "absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent transition-opacity duration-300",
           hoveredItem === item.id ? "opacity-100" : "opacity-0",
         )}
       />
@@ -362,23 +435,23 @@ export function ImageGrid({
       {/* Action buttons on hover */}
       <div
         className={cn(
-          "absolute bottom-0 left-0 right-0 flex items-center justify-between p-3 sm:p-4 transition-all duration-300",
+          "absolute bottom-0 left-0 right-0 flex items-center justify-between p-4 sm:p-5 transition-all duration-300",
           hoveredItem === item.id ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0",
         )}
       >
-        <span className="text-xs sm:text-sm font-medium text-white truncate max-w-[50%]">{item.name}</span>
-        <div className="flex gap-1">
+        <span className="text-sm sm:text-base font-medium text-white truncate max-w-[60%]">{item.name}</span>
+        <div className="flex gap-1.5">
           {onChangeImage && (
             <label>
               <Button
                 variant="secondary"
                 size="icon"
-                className="h-7 w-7 sm:h-8 sm:w-8 bg-white/20 backdrop-blur-sm border-0 hover:bg-white/30"
+                className="h-8 w-8 sm:h-9 sm:w-9 bg-white/20 backdrop-blur-sm border-0 hover:bg-white/30"
                 onClick={(e) => e.stopPropagation()}
                 asChild
               >
                 <span>
-                  <Camera className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
+                  <Camera className="h-4 w-4 text-white" />
                   <input
                     type="file"
                     accept="image/*"
@@ -395,26 +468,26 @@ export function ImageGrid({
           <Button
             variant="secondary"
             size="icon"
-            className="h-7 w-7 sm:h-8 sm:w-8 bg-white/20 backdrop-blur-sm border-0 hover:bg-white/30"
+            className="h-8 w-8 sm:h-9 sm:w-9 bg-white/20 backdrop-blur-sm border-0 hover:bg-white/30"
             onClick={(e) => handleEditClick(item, e)}
           >
-            <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
+            <Edit2 className="h-4 w-4 text-white" />
           </Button>
           <Button
             variant="secondary"
             size="icon"
-            className="h-7 w-7 sm:h-8 sm:w-8 bg-white/20 backdrop-blur-sm border-0 hover:bg-red-500/80"
+            className="h-8 w-8 sm:h-9 sm:w-9 bg-white/20 backdrop-blur-sm border-0 hover:bg-red-500/80"
             onClick={(e) => handleDeleteClick(item, e)}
           >
-            <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
+            <Trash2 className="h-4 w-4 text-white" />
           </Button>
         </div>
       </div>
 
       {/* Rating badge */}
       {(item.metadata as any)?.rating && (
-        <div className="absolute right-2 top-2 sm:right-3 sm:top-3 flex items-center gap-1 rounded-full bg-black/50 backdrop-blur-sm px-2 py-0.5 sm:px-2.5 sm:py-1 text-xs font-medium text-white">
-          <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+        <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-black/60 backdrop-blur-sm px-2.5 py-1 text-xs font-medium text-white">
+          <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
           {(item.metadata as any).rating}
         </div>
       )}
@@ -423,32 +496,82 @@ export function ImageGrid({
 
   return (
     <>
-      <div className="flex-1 overflow-auto p-4 sm:p-6 md:p-8 lg:p-10">
+      <div className="flex-1 overflow-auto p-5 sm:p-8 md:p-10 lg:p-12">
         {/* Header */}
-        <div className="mb-6 sm:mb-8 flex items-center justify-between">
+        <div className="mb-8 sm:mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-semibold text-foreground">
-              {selectedCategory?.name || "All Items"}
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-foreground">
+              {filterByMetadata ? `${filterByMetadata.value}` : selectedCategory?.name || "All Items"}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {filteredItems.length} {filteredItems.length === 1 ? "item" : "items"}
+              {filterByMetadata && (
+                <button onClick={clearFilter} className="ml-2 text-primary hover:underline">
+                  Clear filter
+                </button>
+              )}
             </p>
           </div>
-          <Button onClick={openAddDialog} disabled={categories.length === 0} size="sm" className="md:size-default">
-            <Plus className="mr-1.5 h-4 w-4" />
-            <span className="hidden sm:inline">Add Image</span>
-            <span className="sm:hidden">Add</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            {supportsSorting && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2 bg-transparent">
+                    <ArrowUpDown className="h-4 w-4" />
+                    Sort
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setSortBy("date_added")}>
+                    Date Added {sortBy === "date_added" && "✓"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortBy("name")}>
+                    Name (A-Z) {sortBy === "name" && "✓"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortBy("rating")}>
+                    Rating (High to Low) {sortBy === "rating" && "✓"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSortBy("year")}>
+                    Year (Newest) {sortBy === "year" && "✓"}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <Button onClick={openAddDialog} disabled={categories.length === 0} size="sm" className="md:size-default">
+              <Plus className="mr-1.5 h-4 w-4" />
+              <span className="hidden sm:inline">Add Image</span>
+              <span className="sm:hidden">Add</span>
+            </Button>
+          </div>
         </div>
 
+        {filterByMetadata && (
+          <div className="mb-6 flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Filtered by:</span>
+            <Badge variant="secondary" className="gap-1">
+              {filterByMetadata.key}: {filterByMetadata.value}
+              <button onClick={clearFilter} className="ml-1 hover:text-destructive">
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          </div>
+        )}
+
         {filteredItems.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-16 sm:py-20">
-            <ImageIcon className="mb-4 h-12 w-12 sm:h-16 sm:w-16 text-muted-foreground/50" />
-            <p className="mb-2 text-base sm:text-lg font-medium text-foreground">No images yet</p>
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-20 sm:py-24">
+            <ImageIcon className="mb-4 h-14 w-14 sm:h-18 sm:w-18 text-muted-foreground/50" />
+            <p className="mb-2 text-lg sm:text-xl font-medium text-foreground">No images yet</p>
             <p className="mb-4 text-sm text-muted-foreground text-center px-4">
-              {categories.length === 0 ? "Create a category first, then add images" : "Upload images to get started"}
+              {categories.length === 0
+                ? "Create a category first, then add images"
+                : filterByMetadata
+                  ? "No items match this filter"
+                  : "Upload images to get started"}
             </p>
-            {categories.length > 0 && (
+            {categories.length > 0 && !filterByMetadata && (
               <Button onClick={openAddDialog} size="lg">
                 <Plus className="mr-2 h-4 w-4" />
                 Add your first image
@@ -456,21 +579,21 @@ export function ImageGrid({
             )}
           </div>
         ) : selectedCategoryId ? (
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:gap-5 lg:gap-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div className="grid grid-cols-2 gap-4 sm:gap-5 md:gap-6 lg:gap-8 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {filteredItems.map(renderItemCard)}
           </div>
         ) : (
-          <div className="space-y-10 sm:space-y-12">
+          <div className="space-y-12 sm:space-y-16">
             {groupedItems?.map(({ category, items: categoryItems }) => (
               <section key={category.id}>
-                <div className="mb-4 sm:mb-6 flex items-center gap-3">
-                  <h2 className="text-base sm:text-lg font-semibold text-foreground">{category.name}</h2>
+                <div className="mb-5 sm:mb-7 flex items-center gap-3">
+                  <h2 className="text-lg sm:text-xl font-semibold text-foreground">{category.name}</h2>
                   <div className="h-px flex-1 bg-border" />
                   <span className="text-sm text-muted-foreground">
                     {categoryItems.length} {categoryItems.length === 1 ? "item" : "items"}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-3 sm:gap-4 md:gap-5 lg:gap-6 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                <div className="grid grid-cols-2 gap-4 sm:gap-5 md:gap-6 lg:gap-8 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   {categoryItems.map(renderItemCard)}
                 </div>
               </section>
@@ -480,16 +603,17 @@ export function ImageGrid({
       </div>
 
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-        <DialogContent className="max-w-3xl border-0 bg-background/95 backdrop-blur-xl">
-          <DialogHeader>
-            <DialogTitle>{selectedItem?.name}</DialogTitle>
-            <DialogDescription>
-              {selectedItem && categories.find((c) => c.id === selectedItem.category_id)?.name}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-4xl border-0 bg-background/95 backdrop-blur-xl p-0 overflow-hidden">
+          <button
+            onClick={() => setDetailDialogOpen(false)}
+            className="absolute right-4 top-4 z-50 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+
           {selectedItem && (
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="relative aspect-square overflow-hidden rounded-xl bg-muted group">
+            <div className="grid gap-0 md:grid-cols-2">
+              <div className="relative aspect-[3/4] md:aspect-auto md:h-[70vh] overflow-hidden bg-muted group">
                 <Image
                   src={selectedItem.image_url || "/placeholder.svg"}
                   alt={selectedItem.name}
@@ -518,21 +642,40 @@ export function ImageGrid({
                   </div>
                 )}
               </div>
-              <div className="space-y-4">
+
+              <div className="p-6 sm:p-8 space-y-6 overflow-y-auto max-h-[50vh] md:max-h-[70vh]">
                 <div>
-                  <h4 className="mb-2 text-sm font-medium text-muted-foreground">Details</h4>
-                  <div className="space-y-2">
+                  <h2 className="text-2xl sm:text-3xl font-bold text-foreground">{selectedItem.name}</h2>
+                  <p className="text-muted-foreground mt-1">
+                    {categories.find((c) => c.id === selectedItem.category_id)?.name}
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="mb-4 text-sm font-medium text-muted-foreground uppercase tracking-wide">Details</h4>
+                  <div className="space-y-3">
                     {getSchemaFields(selectedItem.category_id).map((field) => {
                       const value = (selectedItem.metadata as any)?.[field.key]
                       if (value === undefined || value === null || value === "") return null
+
+                      const isClickable = isClickableMetadata(field.key) && typeof value === "string"
+
                       return (
-                        <div key={field.key} className="flex justify-between border-b border-border pb-2">
+                        <div key={field.key} className="flex justify-between items-center border-b border-border pb-3">
                           <span className="text-sm text-muted-foreground">{field.label}</span>
-                          <span className="text-sm font-medium">
+                          <span className="text-sm font-medium text-right">
                             {field.type === "rating" ? (
                               <RatingStars value={value} readonly />
                             ) : field.type === "progress" ? (
                               <span>{value}%</span>
+                            ) : isClickable ? (
+                              <button
+                                onClick={() => handleMetadataClick(field.key, value)}
+                                className="text-primary hover:underline flex items-center gap-1"
+                              >
+                                {formatMetadataValue(field.key, value)}
+                                <Filter className="h-3 w-3" />
+                              </button>
                             ) : (
                               formatMetadataValue(field.key, value)
                             )}
@@ -545,7 +688,8 @@ export function ImageGrid({
                     )}
                   </div>
                 </div>
-                <div className="flex gap-2 pt-4">
+
+                <div className="flex gap-3 pt-4">
                   <Button
                     variant="outline"
                     className="flex-1 bg-transparent"
