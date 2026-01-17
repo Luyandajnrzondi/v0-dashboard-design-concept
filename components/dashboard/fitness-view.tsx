@@ -1,22 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import {
-  Plus,
-  Trash2,
-  Edit2,
-  Calendar,
-  Dumbbell,
-  Flame,
-  Clock,
-  TrendingUp,
-  Moon,
-  Heart,
-  Activity,
-  Droplets,
-  Footprints,
-  Zap,
-} from "lucide-react"
+import { Plus, Trash2, Edit2, Calendar, Dumbbell, Flame, Clock, TrendingUp, Moon, Zap, Target } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -24,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Slider } from "@/components/ui/slider"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Progress } from "@/components/ui/progress"
 import {
   Dialog,
   DialogContent,
@@ -43,7 +29,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
-  LineChart,
   Line,
   BarChart,
   Bar,
@@ -60,6 +45,7 @@ import {
   PolarAngleAxis,
   PolarRadiusAxis,
   Radar,
+  ComposedChart,
 } from "recharts"
 import type { WorkoutLog, Exercise } from "@/lib/types"
 
@@ -72,6 +58,8 @@ interface FitnessViewProps {
 }
 
 const WORKOUT_TYPES = ["Strength", "Cardio", "HIIT", "Yoga", "Sports", "Swimming", "Cycling", "Running", "Other"]
+const MOOD_OPTIONS = ["Excellent", "Good", "Okay", "Tired", "Stressed"]
+const MUSCLE_GROUPS = ["Chest", "Back", "Shoulders", "Arms", "Legs", "Core", "Full Body"]
 
 export function FitnessView({
   categoryId,
@@ -86,7 +74,6 @@ export function FitnessView({
   const [selectedWorkout, setSelectedWorkout] = useState<WorkoutLog | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
-  // Extended form state with new health metrics
   const [formData, setFormData] = useState<{
     workout_date: string
     workout_type: string
@@ -96,16 +83,6 @@ export function FitnessView({
     notes: string
     rpe: number
     sleep_quality: number
-    // New health metrics
-    weight_kg: number | undefined
-    body_fat_percentage: number | undefined
-    resting_heart_rate: number | undefined
-    steps: number | undefined
-    water_intake_ml: number | undefined
-    protein_intake_g: number | undefined
-    mood: string
-    energy_level: number
-    soreness_level: number
   }>({
     workout_date: new Date().toISOString().split("T")[0],
     workout_type: "Strength",
@@ -115,15 +92,6 @@ export function FitnessView({
     notes: "",
     rpe: 7,
     sleep_quality: 3,
-    weight_kg: undefined,
-    body_fat_percentage: undefined,
-    resting_heart_rate: undefined,
-    steps: undefined,
-    water_intake_ml: undefined,
-    protein_intake_g: undefined,
-    mood: "good",
-    energy_level: 7,
-    soreness_level: 3,
   })
 
   // Extended stats calculations
@@ -176,6 +144,25 @@ export function FitnessView({
       return sum + workoutVolume
     }, 0)
 
+    // Best workout (highest calories)
+    const bestWorkout = last30Days.reduce(
+      (best, w) => ((w.calories_burned || 0) > (best?.calories_burned || 0) ? w : best),
+      null as WorkoutLog | null,
+    )
+
+    // Average workout duration
+    const avgDuration = last30Days.length > 0 ? Math.round(totalDuration / last30Days.length) : 0
+
+    // Personal records from all time
+    const allTimeVolume = workoutLogs.reduce((sum, w) => {
+      const workoutVolume = w.exercises.reduce((exSum, ex) => exSum + ex.sets * ex.reps * (ex.weight || 0), 0)
+      return sum + workoutVolume
+    }, 0)
+
+    // Weekly goal progress (assuming 4 workouts per week goal)
+    const weeklyGoal = 4
+    const weeklyProgress = Math.min((last7Days.length / weeklyGoal) * 100, 100)
+
     return {
       workoutsThisWeek: last7Days.length,
       workoutsThisMonth: last30Days.length,
@@ -186,7 +173,11 @@ export function FitnessView({
       currentStreak,
       typeBreakdown,
       totalVolume: Math.round(totalVolume),
-      avgDuration: last30Days.length > 0 ? Math.round(totalDuration / last30Days.length) : 0,
+      avgDuration,
+      bestWorkout,
+      allTimeVolume,
+      weeklyProgress,
+      weeklyGoal,
     }
   }, [workoutLogs])
 
@@ -207,6 +198,10 @@ export function FitnessView({
           dayWorkouts.length > 0
             ? dayWorkouts.reduce((sum, w) => sum + (w.sleep_quality || 0), 0) / dayWorkouts.length
             : 0,
+        volume: dayWorkouts.reduce(
+          (sum, w) => sum + w.exercises.reduce((exSum, ex) => exSum + ex.sets * ex.reps * (ex.weight || 0), 0),
+          0,
+        ),
       }
     })
     return last14Days
@@ -230,6 +225,10 @@ export function FitnessView({
         workouts: weekWorkouts.length,
         totalCalories: weekWorkouts.reduce((sum, w) => sum + (w.calories_burned || 0), 0),
         totalDuration: weekWorkouts.reduce((sum, w) => sum + (w.duration_minutes || 0), 0),
+        totalVolume: weekWorkouts.reduce(
+          (sum, w) => sum + w.exercises.reduce((exSum, ex) => exSum + ex.sets * ex.reps * (ex.weight || 0), 0),
+          0,
+        ),
       }
     })
     return weeks
@@ -267,6 +266,22 @@ export function FitnessView({
       value: Math.round((count / maxCount) * 100),
       count,
     }))
+  }, [workoutLogs])
+
+  // Exercise frequency data
+  const exerciseFrequency = useMemo(() => {
+    const exerciseCounts: Record<string, number> = {}
+    workoutLogs.forEach((w) => {
+      w.exercises.forEach((ex) => {
+        if (ex.name) {
+          exerciseCounts[ex.name] = (exerciseCounts[ex.name] || 0) + 1
+        }
+      })
+    })
+    return Object.entries(exerciseCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([name, count]) => ({ name, count }))
   }, [workoutLogs])
 
   const handleAddExercise = () => {
@@ -344,15 +359,6 @@ export function FitnessView({
       notes: workout.notes || "",
       rpe: workout.rpe || 7,
       sleep_quality: workout.sleep_quality || 3,
-      weight_kg: undefined,
-      body_fat_percentage: undefined,
-      resting_heart_rate: undefined,
-      steps: undefined,
-      water_intake_ml: undefined,
-      protein_intake_g: undefined,
-      mood: "good",
-      energy_level: 7,
-      soreness_level: 3,
     })
     setEditDialogOpen(true)
   }
@@ -367,15 +373,6 @@ export function FitnessView({
       notes: "",
       rpe: 7,
       sleep_quality: 3,
-      weight_kg: undefined,
-      body_fat_percentage: undefined,
-      resting_heart_rate: undefined,
-      steps: undefined,
-      water_intake_ml: undefined,
-      protein_intake_g: undefined,
-      mood: "good",
-      energy_level: 7,
-      soreness_level: 3,
     })
   }
 
@@ -385,17 +382,18 @@ export function FitnessView({
     workouts: "#22c55e",
     rpe: "#8b5cf6",
     sleep: "#06b6d4",
+    volume: "#ec4899",
   }
 
   return (
-    <div className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
+    <div className="flex-1 overflow-auto p-5 sm:p-8 md:p-10 lg:p-12">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl md:text-2xl font-semibold text-foreground">Gym & Fitness</h1>
-          <p className="text-sm text-muted-foreground">Track your workouts, health metrics, and progress</p>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-foreground">Gym & Fitness</h1>
+          <p className="text-sm text-muted-foreground mt-1">Track your workouts, health metrics, and progress</p>
         </div>
-        <Button onClick={() => setAddDialogOpen(true)}>
+        <Button onClick={() => setAddDialogOpen(true)} size="lg">
           <Plus className="mr-2 h-4 w-4" />
           Log Workout
         </Button>
@@ -403,15 +401,17 @@ export function FitnessView({
 
       {/* Stats Cards - Expanded */}
       {stats && (
-        <div className="mb-6 grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
-          <Card>
+        <div className="mb-8 grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+          <Card className="col-span-2 sm:col-span-1">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-medium text-muted-foreground">This Week</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-xs font-medium text-muted-foreground">Weekly Goal</CardTitle>
+              <Target className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.workoutsThisWeek}</div>
-              <p className="text-xs text-muted-foreground">workouts</p>
+              <div className="text-2xl font-bold">
+                {stats.workoutsThisWeek}/{stats.weeklyGoal}
+              </div>
+              <Progress value={stats.weeklyProgress} className="mt-2 h-2" />
             </CardContent>
           </Card>
           <Card>
@@ -469,9 +469,10 @@ export function FitnessView({
 
       {/* Tabs for different views */}
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-3">
+        <TabsList className="grid w-full max-w-lg grid-cols-4">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="progress">Progress</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
 
@@ -484,9 +485,9 @@ export function FitnessView({
                 <CardDescription>Calories and duration over the last 14 days</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-72">
+                <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData}>
+                    <ComposedChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                       <XAxis dataKey="date" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
                       <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
@@ -499,8 +500,14 @@ export function FitnessView({
                       />
                       <Legend />
                       <Bar dataKey="calories" name="Calories" fill={chartColors.calories} radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="duration" name="Minutes" fill={chartColors.duration} radius={[4, 4, 0, 0]} />
-                    </BarChart>
+                      <Line
+                        type="monotone"
+                        dataKey="duration"
+                        name="Duration (min)"
+                        stroke={chartColors.duration}
+                        strokeWidth={2}
+                      />
+                    </ComposedChart>
                   </ResponsiveContainer>
                 </div>
               </CardContent>
@@ -512,7 +519,7 @@ export function FitnessView({
                 <CardDescription>Sleep quality and RPE trends</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-72">
+                <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
@@ -557,7 +564,7 @@ export function FitnessView({
                 <CardDescription>Distribution of workout types this month</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-72">
+                <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <RadarChart data={radarData}>
                       <PolarGrid className="stroke-border" />
@@ -570,13 +577,6 @@ export function FitnessView({
                         fill={chartColors.workouts}
                         fillOpacity={0.5}
                       />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                        }}
-                      />
                     </RadarChart>
                   </ResponsiveContainer>
                 </div>
@@ -585,16 +585,21 @@ export function FitnessView({
 
             <Card>
               <CardHeader>
-                <CardTitle>Weekly Progress</CardTitle>
-                <CardDescription>Workout count over the last 8 weeks</CardDescription>
+                <CardTitle>Top Exercises</CardTitle>
+                <CardDescription>Most frequently performed exercises</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="h-72">
+                <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={weeklyData}>
+                    <BarChart data={exerciseFrequency} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                      <XAxis dataKey="week" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                      <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                      <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                      <YAxis
+                        dataKey="name"
+                        type="category"
+                        width={100}
+                        tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                      />
                       <Tooltip
                         contentStyle={{
                           backgroundColor: "hsl(var(--card))",
@@ -602,16 +607,8 @@ export function FitnessView({
                           borderRadius: "8px",
                         }}
                       />
-                      <Legend />
-                      <Line
-                        type="monotone"
-                        dataKey="workouts"
-                        name="Workouts"
-                        stroke={chartColors.workouts}
-                        strokeWidth={2}
-                        dot={{ fill: chartColors.workouts }}
-                      />
-                    </LineChart>
+                      <Bar dataKey="count" name="Times" fill={chartColors.volume} radius={[0, 4, 4, 0]} />
+                    </BarChart>
                   </ResponsiveContainer>
                 </div>
               </CardContent>
@@ -620,191 +617,175 @@ export function FitnessView({
         </TabsContent>
 
         <TabsContent value="analytics" className="space-y-6">
-          {/* Health Metrics Cards */}
-          <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-            <Card className="bg-gradient-to-br from-red-500/10 to-transparent">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Avg Heart Rate</CardTitle>
-                <Heart className="h-4 w-4 text-red-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">72</div>
-                <p className="text-xs text-muted-foreground">BPM (resting)</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-blue-500/10 to-transparent">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Avg Steps</CardTitle>
-                <Footprints className="h-4 w-4 text-blue-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">8,432</div>
-                <p className="text-xs text-muted-foreground">daily average</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-cyan-500/10 to-transparent">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Hydration</CardTitle>
-                <Droplets className="h-4 w-4 text-cyan-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">2.4L</div>
-                <p className="text-xs text-muted-foreground">daily avg</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-purple-500/10 to-transparent">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Sleep Avg</CardTitle>
-                <Moon className="h-4 w-4 text-purple-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats?.avgSleep || 0}/5</div>
-                <p className="text-xs text-muted-foreground">quality score</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Detailed Analytics */}
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Volume Progression</CardTitle>
-                <CardDescription>Total weight lifted per week</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={weeklyData}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                      <XAxis dataKey="week" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                      <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                        }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="totalCalories"
-                        name="Calories"
-                        stroke={chartColors.calories}
-                        fill={chartColors.calories}
-                        fillOpacity={0.4}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Training Time</CardTitle>
-                <CardDescription>Weekly duration breakdown</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={weeklyData}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                      <XAxis dataKey="week" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                      <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--card))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px",
-                        }}
-                      />
-                      <Bar dataKey="totalDuration" name="Minutes" fill={chartColors.duration} radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Goals Progress */}
+          {/* Weekly comparison */}
           <Card>
             <CardHeader>
-              <CardTitle>Monthly Goals</CardTitle>
-              <CardDescription>Track your fitness targets</CardDescription>
+              <CardTitle>Weekly Comparison</CardTitle>
+              <CardDescription>Compare your performance across weeks</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-6 md:grid-cols-3">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Workouts</span>
-                    <span className="text-sm text-muted-foreground">{stats?.workoutsThisMonth || 0}/20</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-muted">
-                    <div
-                      className="h-2 rounded-full bg-green-500 transition-all"
-                      style={{ width: `${Math.min(((stats?.workoutsThisMonth || 0) / 20) * 100, 100)}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Calories</span>
-                    <span className="text-sm text-muted-foreground">
-                      {stats?.totalCalories.toLocaleString() || 0}/10,000
-                    </span>
-                  </div>
-                  <div className="h-2 rounded-full bg-muted">
-                    <div
-                      className="h-2 rounded-full bg-orange-500 transition-all"
-                      style={{ width: `${Math.min(((stats?.totalCalories || 0) / 10000) * 100, 100)}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Active Hours</span>
-                    <span className="text-sm text-muted-foreground">
-                      {Math.round((stats?.totalDuration || 0) / 60)}/30
-                    </span>
-                  </div>
-                  <div className="h-2 rounded-full bg-muted">
-                    <div
-                      className="h-2 rounded-full bg-blue-500 transition-all"
-                      style={{
-                        width: `${Math.min(((stats?.totalDuration || 0) / 60 / 30) * 100, 100)}%`,
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={weeklyData}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="week" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                    <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
                       }}
                     />
-                  </div>
-                </div>
+                    <Legend />
+                    <Bar dataKey="workouts" name="Workouts" fill={chartColors.workouts} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="totalCalories" name="Calories" fill={chartColors.calories} radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Volume Trend */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Volume Trend</CardTitle>
+              <CardDescription>Total weight lifted over time</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                    <XAxis dataKey="date" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                    <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                      formatter={(value: number) => [`${(value / 1000).toFixed(1)}k kg`, "Volume"]}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="volume"
+                      name="Volume (kg)"
+                      stroke={chartColors.volume}
+                      fill={chartColors.volume}
+                      fillOpacity={0.3}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
+        <TabsContent value="progress" className="space-y-6">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {stats && (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Calendar className="h-5 w-5 text-blue-500" />
+                      Consistency
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">This Week</span>
+                      <span className="font-medium">{stats.workoutsThisWeek} workouts</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">This Month</span>
+                      <span className="font-medium">{stats.workoutsThisMonth} workouts</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Current Streak</span>
+                      <span className="font-medium">{stats.currentStreak} days</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Avg Duration</span>
+                      <span className="font-medium">{stats.avgDuration} min</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Dumbbell className="h-5 w-5 text-purple-500" />
+                      Strength
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Monthly Volume</span>
+                      <span className="font-medium">{(stats.totalVolume / 1000).toFixed(1)}k kg</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">All-Time Volume</span>
+                      <span className="font-medium">{(stats.allTimeVolume / 1000).toFixed(1)}k kg</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Avg RPE</span>
+                      <span className="font-medium">{stats.avgRpe}/10</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Moon className="h-5 w-5 text-cyan-500" />
+                      Recovery
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Avg Sleep Quality</span>
+                      <span className="font-medium">{stats.avgSleep}/5</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Total Calories</span>
+                      <span className="font-medium">{stats.totalCalories.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Total Duration</span>
+                      <span className="font-medium">{Math.round(stats.totalDuration / 60)}h</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
+        </TabsContent>
+
         <TabsContent value="history" className="space-y-6">
-          {/* Workout Logs List */}
           <Card>
             <CardHeader>
-              <CardTitle>Recent Workouts</CardTitle>
-              <CardDescription>Your complete workout history</CardDescription>
+              <CardTitle>Workout History</CardTitle>
+              <CardDescription>Your recent workout sessions</CardDescription>
             </CardHeader>
             <CardContent>
               {workoutLogs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <Dumbbell className="mb-4 h-16 w-16 text-muted-foreground/50" />
-                  <p className="mb-2 text-lg font-medium">No workouts logged yet</p>
-                  <p className="mb-4 text-sm text-muted-foreground">Start tracking your fitness journey</p>
-                  <Button onClick={() => setAddDialogOpen(true)} size="lg">
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Dumbbell className="mb-4 h-12 w-12 text-muted-foreground/50" />
+                  <p className="text-lg font-medium text-foreground">No workouts logged yet</p>
+                  <p className="text-sm text-muted-foreground">Start tracking your fitness journey</p>
+                  <Button onClick={() => setAddDialogOpen(true)} className="mt-4">
                     <Plus className="mr-2 h-4 w-4" />
-                    Log your first workout
+                    Log Your First Workout
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {workoutLogs.map((workout) => (
+                <div className="space-y-4">
+                  {workoutLogs.slice(0, 10).map((workout) => (
                     <div
                       key={workout.id}
-                      className="group flex items-center justify-between rounded-xl border border-border p-4 transition-colors hover:bg-muted/50"
+                      className="flex items-center justify-between rounded-lg border border-border p-4 hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex items-center gap-4">
                         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
@@ -818,36 +799,29 @@ export function FitnessView({
                               month: "short",
                               day: "numeric",
                             })}
-                            {workout.duration_minutes && ` • ${workout.duration_minutes} min`}
-                            {workout.calories_burned && ` • ${workout.calories_burned} cal`}
                           </p>
-                          {workout.exercises.length > 0 && (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {workout.exercises
-                                .slice(0, 3)
-                                .map((e) => e.name)
-                                .filter(Boolean)
-                                .join(", ")}
-                              {workout.exercises.length > 3 && ` +${workout.exercises.length - 3} more`}
-                            </p>
-                          )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                        <Button variant="ghost" size="icon" onClick={() => openEditDialog(workout)}>
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => {
-                            setSelectedWorkout(workout)
-                            setDeleteDialogOpen(true)
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                      <div className="flex items-center gap-6">
+                        <div className="text-right hidden sm:block">
+                          <p className="text-sm font-medium">{workout.duration_minutes} min</p>
+                          <p className="text-xs text-muted-foreground">{workout.calories_burned} cal</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(workout)}>
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setSelectedWorkout(workout)
+                              setDeleteDialogOpen(true)
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -858,26 +832,14 @@ export function FitnessView({
         </TabsContent>
       </Tabs>
 
-      {/* Add/Edit Workout Dialog */}
-      <Dialog
-        open={addDialogOpen || editDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setAddDialogOpen(false)
-            setEditDialogOpen(false)
-            setSelectedWorkout(null)
-            resetForm()
-          }
-        }}
-      >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      {/* Add Workout Dialog */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editDialogOpen ? "Edit Workout" : "Log Workout"}</DialogTitle>
-            <DialogDescription>
-              {editDialogOpen ? "Update your workout details" : "Record your training session"}
-            </DialogDescription>
+            <DialogTitle>Log Workout</DialogTitle>
+            <DialogDescription>Record your training session details</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-6 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label>Date</Label>
@@ -903,9 +865,61 @@ export function FitnessView({
               </div>
             </div>
 
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label>Exercises</Label>
+                <Button type="button" variant="outline" size="sm" onClick={handleAddExercise}>
+                  <Plus className="mr-1 h-3 w-3" />
+                  Add Exercise
+                </Button>
+              </div>
+              {formData.exercises.map((exercise, index) => (
+                <div key={index} className="grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-4">
+                    <Input
+                      placeholder="Exercise name"
+                      value={exercise.name}
+                      onChange={(e) => handleExerciseChange(index, "name", e.target.value)}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Input
+                      type="number"
+                      placeholder="Sets"
+                      value={exercise.sets}
+                      onChange={(e) => handleExerciseChange(index, "sets", Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Input
+                      type="number"
+                      placeholder="Reps"
+                      value={exercise.reps}
+                      onChange={(e) => handleExerciseChange(index, "reps", Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="col-span-3">
+                    <Input
+                      type="number"
+                      placeholder="Weight (kg)"
+                      value={exercise.weight || ""}
+                      onChange={(e) => handleExerciseChange(index, "weight", Number(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    {formData.exercises.length > 1 && (
+                      <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveExercise(index)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label>Duration (min)</Label>
+                <Label>Duration (minutes)</Label>
                 <Input
                   type="number"
                   value={formData.duration_minutes}
@@ -922,71 +936,11 @@ export function FitnessView({
               </div>
             </div>
 
-            {/* Exercises */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label>Exercises</Label>
-                <Button type="button" variant="outline" size="sm" onClick={handleAddExercise}>
-                  <Plus className="mr-1 h-3 w-3" />
-                  Add Exercise
-                </Button>
-              </div>
-              {formData.exercises.map((exercise, index) => (
-                <div key={index} className="grid grid-cols-12 gap-2 rounded-xl border border-border p-3">
-                  <div className="col-span-12 sm:col-span-4">
-                    <Input
-                      placeholder="Exercise name"
-                      value={exercise.name}
-                      onChange={(e) => handleExerciseChange(index, "name", e.target.value)}
-                    />
-                  </div>
-                  <div className="col-span-4 sm:col-span-2">
-                    <Input
-                      type="number"
-                      placeholder="Sets"
-                      value={exercise.sets}
-                      onChange={(e) => handleExerciseChange(index, "sets", Number(e.target.value))}
-                    />
-                  </div>
-                  <div className="col-span-4 sm:col-span-2">
-                    <Input
-                      type="number"
-                      placeholder="Reps"
-                      value={exercise.reps}
-                      onChange={(e) => handleExerciseChange(index, "reps", Number(e.target.value))}
-                    />
-                  </div>
-                  <div className="col-span-3 sm:col-span-3">
-                    <Input
-                      type="number"
-                      placeholder="Weight (kg)"
-                      value={exercise.weight || ""}
-                      onChange={(e) =>
-                        handleExerciseChange(index, "weight", e.target.value ? Number(e.target.value) : undefined)
-                      }
-                    />
-                  </div>
-                  <div className="col-span-1 flex items-center justify-center">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive"
-                      onClick={() => handleRemoveExercise(index)}
-                      disabled={formData.exercises.length === 1}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
             <div className="grid gap-2">
               <Label>RPE (Rate of Perceived Exertion): {formData.rpe}/10</Label>
               <Slider
                 value={[formData.rpe]}
-                onValueChange={([v]) => setFormData((prev) => ({ ...prev, rpe: v }))}
+                onValueChange={([value]) => setFormData((prev) => ({ ...prev, rpe: value }))}
                 max={10}
                 min={1}
                 step={1}
@@ -994,28 +948,11 @@ export function FitnessView({
             </div>
 
             <div className="grid gap-2">
-              <Label className="flex items-center gap-2">
-                <Moon className="h-4 w-4" />
-                Sleep Quality: {formData.sleep_quality}/5
-              </Label>
+              <Label>Sleep Quality Last Night: {formData.sleep_quality}/5</Label>
               <Slider
                 value={[formData.sleep_quality]}
-                onValueChange={([v]) => setFormData((prev) => ({ ...prev, sleep_quality: v }))}
+                onValueChange={([value]) => setFormData((prev) => ({ ...prev, sleep_quality: value }))}
                 max={5}
-                min={1}
-                step={1}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label className="flex items-center gap-2">
-                <Activity className="h-4 w-4" />
-                Energy Level: {formData.energy_level}/10
-              </Label>
-              <Slider
-                value={[formData.energy_level]}
-                onValueChange={([v]) => setFormData((prev) => ({ ...prev, energy_level: v }))}
-                max={10}
                 min={1}
                 step={1}
               />
@@ -1024,27 +961,164 @@ export function FitnessView({
             <div className="grid gap-2">
               <Label>Notes</Label>
               <Textarea
+                placeholder="How did you feel? Any personal records?"
                 value={formData.notes}
                 onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
-                placeholder="How did you feel? Any observations?"
-                rows={3}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setAddDialogOpen(false)
-                setEditDialogOpen(false)
-                setSelectedWorkout(null)
-                resetForm()
-              }}
-            >
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={editDialogOpen ? handleUpdateWorkout : handleAddWorkout} disabled={isLoading}>
-              {isLoading ? "Saving..." : editDialogOpen ? "Save Changes" : "Log Workout"}
+            <Button onClick={handleAddWorkout} disabled={isLoading}>
+              {isLoading ? "Saving..." : "Save Workout"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Workout</DialogTitle>
+            <DialogDescription>Update your workout details</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-6 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Date</Label>
+                <Input
+                  type="date"
+                  value={formData.workout_date}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, workout_date: e.target.value }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Workout Type</Label>
+                <select
+                  value={formData.workout_type}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, workout_type: e.target.value }))}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  {WORKOUT_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label>Exercises</Label>
+                <Button type="button" variant="outline" size="sm" onClick={handleAddExercise}>
+                  <Plus className="mr-1 h-3 w-3" />
+                  Add Exercise
+                </Button>
+              </div>
+              {formData.exercises.map((exercise, index) => (
+                <div key={index} className="grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-4">
+                    <Input
+                      placeholder="Exercise name"
+                      value={exercise.name}
+                      onChange={(e) => handleExerciseChange(index, "name", e.target.value)}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Input
+                      type="number"
+                      placeholder="Sets"
+                      value={exercise.sets}
+                      onChange={(e) => handleExerciseChange(index, "sets", Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Input
+                      type="number"
+                      placeholder="Reps"
+                      value={exercise.reps}
+                      onChange={(e) => handleExerciseChange(index, "reps", Number(e.target.value))}
+                    />
+                  </div>
+                  <div className="col-span-3">
+                    <Input
+                      type="number"
+                      placeholder="Weight (kg)"
+                      value={exercise.weight || ""}
+                      onChange={(e) => handleExerciseChange(index, "weight", Number(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    {formData.exercises.length > 1 && (
+                      <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveExercise(index)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Duration (minutes)</Label>
+                <Input
+                  type="number"
+                  value={formData.duration_minutes}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, duration_minutes: Number(e.target.value) }))}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Calories Burned</Label>
+                <Input
+                  type="number"
+                  value={formData.calories_burned}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, calories_burned: Number(e.target.value) }))}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label>RPE (Rate of Perceived Exertion): {formData.rpe}/10</Label>
+              <Slider
+                value={[formData.rpe]}
+                onValueChange={([value]) => setFormData((prev) => ({ ...prev, rpe: value }))}
+                max={10}
+                min={1}
+                step={1}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Sleep Quality Last Night: {formData.sleep_quality}/5</Label>
+              <Slider
+                value={[formData.sleep_quality]}
+                onValueChange={([value]) => setFormData((prev) => ({ ...prev, sleep_quality: value }))}
+                max={5}
+                min={1}
+                step={1}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Notes</Label>
+              <Textarea
+                placeholder="How did you feel? Any personal records?"
+                value={formData.notes}
+                onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateWorkout} disabled={isLoading}>
+              {isLoading ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1065,7 +1139,7 @@ export function FitnessView({
               onClick={handleDeleteWorkout}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {isLoading ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

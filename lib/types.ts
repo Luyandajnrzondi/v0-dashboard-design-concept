@@ -9,7 +9,9 @@ export interface Category {
 
 export type CategoryType =
   | "general"
-  | "media" // Movies & TV Shows
+  | "media" // Legacy - Movies & TV Shows combined
+  | "movies" // Movies only
+  | "tvshows" // TV Shows only
   | "music" // Music (Albums, Artists, Tracks)
   | "reading" // Books & Podcasts
   | "goals" // Year Goals / Life Goals
@@ -18,7 +20,8 @@ export type CategoryType =
   | "travel" // Travel & Places
   | "ideas" // Ideas, Inspiration & Notes
   | "career" // Career / Learning
-  | "finance" // New finance type
+  | "finance" // Finance
+  | "todos" // Todo list
 
 export interface Item {
   id: string
@@ -27,6 +30,7 @@ export interface Item {
   type: string
   image_url: string
   metadata: ItemMetadata
+  rank?: number
   created_at: string
   updated_at: string
 }
@@ -48,6 +52,35 @@ export interface MediaMetadata extends BaseMetadata {
   runtime?: string
   themes?: string[]
   director?: string
+  platform?: string
+  rewatch_value?: "low" | "medium" | "high"
+}
+
+// Movies-specific metadata
+export interface MoviesMetadata extends BaseMetadata {
+  year?: number
+  genre?: string
+  status?: "watched" | "watching" | "to_watch"
+  rating?: number
+  mood_type?: "chill" | "intense" | "inspiring"
+  runtime?: string
+  themes?: string[]
+  director?: string
+  platform?: string
+  rewatch_value?: "low" | "medium" | "high"
+}
+
+// TV Shows-specific metadata
+export interface TVShowsMetadata extends BaseMetadata {
+  year?: number
+  genre?: string
+  status?: "watched" | "watching" | "to_watch"
+  rating?: number
+  mood_type?: "chill" | "intense" | "inspiring"
+  seasons?: number
+  episodes?: number
+  themes?: string[]
+  creator?: string
   platform?: string
   rewatch_value?: "low" | "medium" | "high"
 }
@@ -182,8 +215,21 @@ export interface SavingsGoal {
   updated_at: string
 }
 
+export interface Todo {
+  id: string
+  title: string
+  description?: string
+  is_completed: boolean
+  priority: "low" | "medium" | "high"
+  due_date?: string
+  created_at: string
+  updated_at: string
+}
+
 export type ItemMetadata =
   | MediaMetadata
+  | MoviesMetadata
+  | TVShowsMetadata
   | MusicMetadata
   | ReadingMetadata
   | GoalsMetadata
@@ -234,6 +280,35 @@ export const CATEGORY_SCHEMAS: Record<CategoryType, { fields: SchemaField[] }> =
       { key: "notes", label: "Notes", type: "textarea" },
     ],
   },
+  movies: {
+    fields: [
+      { key: "year", label: "Year", type: "number" },
+      { key: "genre", label: "Genre", type: "text" },
+      { key: "status", label: "Status", type: "select", options: ["watched", "watching", "to_watch"] },
+      { key: "rating", label: "Rating", type: "rating" },
+      { key: "mood_type", label: "Mood", type: "select", options: ["chill", "intense", "inspiring"] },
+      { key: "runtime", label: "Runtime", type: "text" },
+      { key: "director", label: "Director", type: "text" },
+      { key: "platform", label: "Platform", type: "text" },
+      { key: "rewatch_value", label: "Rewatch Value", type: "select", options: ["low", "medium", "high"] },
+      { key: "notes", label: "Notes", type: "textarea" },
+    ],
+  },
+  tvshows: {
+    fields: [
+      { key: "year", label: "Year", type: "number" },
+      { key: "genre", label: "Genre", type: "text" },
+      { key: "status", label: "Status", type: "select", options: ["watched", "watching", "to_watch"] },
+      { key: "rating", label: "Rating", type: "rating" },
+      { key: "mood_type", label: "Mood", type: "select", options: ["chill", "intense", "inspiring"] },
+      { key: "seasons", label: "Seasons", type: "number" },
+      { key: "episodes", label: "Episodes", type: "number" },
+      { key: "creator", label: "Creator", type: "text" },
+      { key: "platform", label: "Platform", type: "text" },
+      { key: "rewatch_value", label: "Rewatch Value", type: "select", options: ["low", "medium", "high"] },
+      { key: "notes", label: "Notes", type: "textarea" },
+    ],
+  },
   music: {
     fields: [
       { key: "artist", label: "Artist", type: "text" },
@@ -270,7 +345,7 @@ export const CATEGORY_SCHEMAS: Record<CategoryType, { fields: SchemaField[] }> =
     ],
   },
   fitness: {
-    fields: [], // Fitness uses special workout log UI
+    fields: [],
   },
   games: {
     fields: [
@@ -317,6 +392,12 @@ export const CATEGORY_SCHEMAS: Record<CategoryType, { fields: SchemaField[] }> =
       { key: "feedback", label: "Feedback Received", type: "textarea" },
       { key: "career_direction", label: "Career Direction Notes", type: "textarea" },
     ],
+  },
+  finance: {
+    fields: [],
+  },
+  todos: {
+    fields: [],
   },
 }
 

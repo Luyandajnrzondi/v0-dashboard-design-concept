@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import type { SidebarProps } from "./types" // Declare SidebarProps import
+import type { SidebarProps } from "./types"
 
 import { useState } from "react"
 import {
@@ -23,6 +23,9 @@ import {
   Lightbulb,
   Briefcase,
   Wallet,
+  LayoutGrid,
+  Tv,
+  CheckSquare,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -43,6 +46,7 @@ import type { Category } from "@/lib/types"
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   folder: Folder,
   film: Film,
+  tv: Tv,
   music: Music,
   "book-open": BookOpen,
   target: Target,
@@ -51,7 +55,26 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   "map-pin": MapPin,
   lightbulb: Lightbulb,
   briefcase: Briefcase,
-  wallet: Wallet, // Added wallet icon mapping for finance
+  wallet: Wallet,
+  "layout-grid": LayoutGrid,
+  "check-square": CheckSquare,
+}
+
+const TYPE_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  media: Film,
+  movies: Film,
+  tvshows: Tv,
+  music: Music,
+  reading: BookOpen,
+  goals: Target,
+  fitness: Dumbbell,
+  games: Gamepad2,
+  travel: MapPin,
+  ideas: Lightbulb,
+  career: Briefcase,
+  finance: Wallet,
+  todos: CheckSquare,
+  general: Folder,
 }
 
 export function Sidebar({
@@ -121,8 +144,15 @@ export function Sidebar({
   }
 
   const getCategoryIcon = (category: Category) => {
-    const IconComponent = ICON_MAP[category.icon] || Folder
-    return IconComponent
+    // First try to get icon from the icon field
+    if (category.icon && ICON_MAP[category.icon]) {
+      return ICON_MAP[category.icon]
+    }
+    // Fall back to type-based icon
+    if (category.type && TYPE_ICON_MAP[category.type]) {
+      return TYPE_ICON_MAP[category.type]
+    }
+    return Folder
   }
 
   return (
@@ -153,13 +183,13 @@ export function Sidebar({
             <button
               onClick={() => onSelectCategory(null)}
               className={cn(
-                "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors",
                 selectedCategoryId === null
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
                   : "text-sidebar-foreground hover:bg-sidebar-accent/50",
               )}
             >
-              <Folder className="h-4 w-4 shrink-0" />
+              <LayoutGrid className="h-4 w-4 shrink-0" />
               {!collapsed && <span className="truncate">All Items</span>}
             </button>
 
@@ -202,7 +232,7 @@ export function Sidebar({
                     <button
                       onClick={() => onSelectCategory(category.id)}
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                        "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors",
                         selectedCategoryId === category.id
                           ? "bg-sidebar-accent text-sidebar-accent-foreground"
                           : "text-sidebar-foreground hover:bg-sidebar-accent/50",

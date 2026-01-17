@@ -3,7 +3,20 @@
 import type React from "react"
 import { useState, useEffect, useRef, useMemo } from "react"
 import Image from "next/image"
-import { Plus, Trash2, Edit2, X, Upload, ImageIcon, Star, RefreshCw, Camera, ArrowUpDown, Filter } from "lucide-react"
+import {
+  Plus,
+  Trash2,
+  Edit2,
+  X,
+  Upload,
+  ImageIcon,
+  Star,
+  RefreshCw,
+  Camera,
+  ArrowUpDown,
+  Filter,
+  Hash,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -45,14 +58,14 @@ interface ImageGridProps {
   items: Item[]
   categories: Category[]
   selectedCategoryId: string | null
-  onAddItem: (categoryId: string, name: string, file: File, metadata?: ItemMetadata) => Promise<void>
-  onUpdateItem: (id: string, name: string, metadata?: ItemMetadata) => Promise<void>
+  onAddItem: (categoryId: string, name: string, file: File, metadata?: ItemMetadata, rank?: number) => Promise<void>
+  onUpdateItem: (id: string, name: string, metadata?: ItemMetadata, rank?: number) => Promise<void>
   onDeleteItem: (id: string, imageUrl: string) => Promise<void>
   onChangeImage?: (id: string, file: File) => Promise<void>
   onItemFocused?: (focused: boolean) => void
 }
 
-type SortOption = "name" | "rating" | "year" | "date_added"
+type SortOption = "name" | "rating" | "year" | "date_added" | "rank"
 
 function RatingStars({
   value,
@@ -174,10 +187,12 @@ export function ImageGrid({
   const [newItemName, setNewItemName] = useState("")
   const [newItemCategory, setNewItemCategory] = useState("")
   const [newItemMetadata, setNewItemMetadata] = useState<ItemMetadata>({})
+  const [newItemRank, setNewItemRank] = useState<number | undefined>(undefined)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [editName, setEditName] = useState("")
   const [editMetadata, setEditMetadata] = useState<ItemMetadata>({})
+  const [editRank, setEditRank] = useState<number | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(false)
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
   const [isChangingImage, setIsChangingImage] = useState(false)
@@ -188,7 +203,13 @@ export function ImageGrid({
 
   const selectedCategory = selectedCategoryId ? categories.find((c) => c.id === selectedCategoryId) : null
 
-  const supportsSorting = selectedCategory?.type === "media" || selectedCategory?.type === "music"
+  const supportsRanking =
+    selectedCategory?.type === "movies" ||
+    selectedCategory?.type === "tvshows" ||
+    selectedCategory?.type === "music" ||
+    selectedCategory?.type === "reading" ||
+    selectedCategory?.type === "media"
+  const supportsSorting = supportsRanking || selectedCategory?.type === "games"
 
   const baseFilteredItems = useMemo(() => {
     let filtered = selectedCategoryId ? items.filter((item) => item.category_id === selectedCategoryId) : items
@@ -228,6 +249,13 @@ export function ImageGrid({
           return yearB - yearA
         })
         break
+      case "rank":
+        sorted.sort((a, b) => {
+          const rankA = a.rank ?? 999
+          const rankB = b.rank ?? 999
+          return rankA - rankB
+        })
+        break
       case "date_added":
       default:
         sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -257,6 +285,11 @@ export function ImageGrid({
   const getCategoryType = (categoryId: string): CategoryType => {
     const cat = categories.find((c) => c.id === categoryId)
     return (cat?.type as CategoryType) || "general"
+  }
+
+  const categorySupportsRanking = (categoryId: string): boolean => {
+    const type = getCategoryType(categoryId)
+    return type === "movies" || type === "tvshows" || type === "music" || type === "reading" || type === "media"
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -300,7 +333,7 @@ export function ImageGrid({
     if (!newItemName.trim() || !selectedFile || !newItemCategory) return
     setIsLoading(true)
     try {
-      await onAddItem(newItemCategory, newItemName.trim(), selectedFile, newItemMetadata)
+      await onAddItem(newItemCategory, newItemName.trim(), selectedFile, newItemMetadata, newItemRank)
       resetAddDialog()
     } finally {
       setIsLoading(false)
@@ -312,6 +345,7 @@ export function ImageGrid({
     setNewItemName("")
     setNewItemCategory("")
     setNewItemMetadata({})
+    setNewItemRank(undefined)
     setSelectedFile(null)
     if (previewUrl) URL.revokeObjectURL(previewUrl)
     setPreviewUrl(null)
@@ -322,6 +356,7 @@ export function ImageGrid({
     setSelectedItem(item)
     setEditName(item.name)
     setEditMetadata(item.metadata || {})
+    setEditRank(item.rank)
     setEditDialogOpen(true)
   }
 
@@ -329,11 +364,12 @@ export function ImageGrid({
     if (!selectedItem || !editName.trim()) return
     setIsLoading(true)
     try {
-      await onUpdateItem(selectedItem.id, editName.trim(), editMetadata)
+      await onUpdateItem(selectedItem.id, editName.trim(), editMetadata, editRank)
       setEditDialogOpen(false)
       setSelectedItem(null)
       setEditName("")
       setEditMetadata({})
+      setEditRank(undefined)
     } finally {
       setIsLoading(false)
     }
@@ -375,6 +411,7 @@ export function ImageGrid({
   const openAddDialog = () => {
     setNewItemCategory(selectedCategoryId || (categories[0]?.id ?? ""))
     setNewItemMetadata({})
+    setNewItemRank(undefined)
     setAddDialogOpen(true)
   }
 
@@ -399,7 +436,7 @@ export function ImageGrid({
   }
 
   const isClickableMetadata = (key: string) => {
-    return ["director", "artist", "genre"].includes(key)
+    return ["director", "artist", "genre", "creator", "author"].includes(key)
   }
 
   const renderItemCard = (item: Item) => (
@@ -431,6 +468,12 @@ export function ImageGrid({
           hoveredItem === item.id ? "opacity-100" : "opacity-0",
         )}
       />
+
+      {item.rank && (
+        <div className="absolute left-3 top-3 flex items-center justify-center h-8 w-8 rounded-full bg-primary text-primary-foreground text-sm font-bold shadow-lg">
+          {item.rank}
+        </div>
+      )}
 
       {/* Action buttons on hover */}
       <div
@@ -505,6 +548,7 @@ export function ImageGrid({
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {filteredItems.length} {filteredItems.length === 1 ? "item" : "items"}
+              {supportsRanking && " - Top 100 Ranking"}
               {filterByMetadata && (
                 <button onClick={clearFilter} className="ml-2 text-primary hover:underline">
                   Clear filter
@@ -524,6 +568,12 @@ export function ImageGrid({
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Sort by</DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  {supportsRanking && (
+                    <DropdownMenuItem onClick={() => setSortBy("rank")}>
+                      <Hash className="mr-2 h-4 w-4" />
+                      Rank (Top 100) {sortBy === "rank" && "✓"}
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={() => setSortBy("date_added")}>
                     Date Added {sortBy === "date_added" && "✓"}
                   </DropdownMenuItem>
@@ -569,7 +619,9 @@ export function ImageGrid({
                 ? "Create a category first, then add images"
                 : filterByMetadata
                   ? "No items match this filter"
-                  : "Upload images to get started"}
+                  : supportsRanking
+                    ? "Start building your Top 100 list"
+                    : "Upload images to get started"}
             </p>
             {categories.length > 0 && !filterByMetadata && (
               <Button onClick={openAddDialog} size="lg">
@@ -620,6 +672,12 @@ export function ImageGrid({
                   fill
                   className="object-cover"
                 />
+                {selectedItem.rank && (
+                  <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-3 py-1.5 text-sm font-bold shadow-lg">
+                    <Hash className="h-4 w-4" />
+                    Rank #{selectedItem.rank}
+                  </div>
+                )}
                 {/* Change image button */}
                 {onChangeImage && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -654,6 +712,12 @@ export function ImageGrid({
                 <div>
                   <h4 className="mb-4 text-sm font-medium text-muted-foreground uppercase tracking-wide">Details</h4>
                   <div className="space-y-3">
+                    {selectedItem.rank && (
+                      <div className="flex justify-between items-center border-b border-border pb-3">
+                        <span className="text-sm text-muted-foreground">Rank</span>
+                        <span className="text-sm font-medium">#{selectedItem.rank} of 100</span>
+                      </div>
+                    )}
                     {getSchemaFields(selectedItem.category_id).map((field) => {
                       const value = (selectedItem.metadata as any)?.[field.key]
                       if (value === undefined || value === null || value === "") return null
@@ -683,7 +747,7 @@ export function ImageGrid({
                         </div>
                       )
                     })}
-                    {Object.keys(selectedItem.metadata || {}).length === 0 && (
+                    {Object.keys(selectedItem.metadata || {}).length === 0 && !selectedItem.rank && (
                       <p className="text-sm text-muted-foreground">No additional details</p>
                     )}
                   </div>
@@ -743,11 +807,12 @@ export function ImageGrid({
                 onChange={(e) => {
                   setNewItemCategory(e.target.value)
                   setNewItemMetadata({})
+                  setNewItemRank(undefined)
                 }}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {categories
-                  .filter((c) => c.type !== "fitness" && c.type !== "finance")
+                  .filter((c) => c.type !== "fitness" && c.type !== "finance" && c.type !== "todos")
                   .map((cat) => (
                     <option key={cat.id} value={cat.id}>
                       {cat.name}
@@ -755,6 +820,23 @@ export function ImageGrid({
                   ))}
               </select>
             </div>
+
+            {newItemCategory && categorySupportsRanking(newItemCategory) && (
+              <div className="grid gap-2">
+                <Label htmlFor="rank">Rank (1-100)</Label>
+                <Input
+                  id="rank"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={newItemRank || ""}
+                  onChange={(e) => setNewItemRank(e.target.value ? Number(e.target.value) : undefined)}
+                  placeholder="Enter rank position (optional)"
+                />
+                <p className="text-xs text-muted-foreground">Assign a position from 1 to 100 for your Top 100 list</p>
+              </div>
+            )}
+
             <div className="grid gap-2">
               <Label>Image</Label>
               <div
@@ -834,6 +916,7 @@ export function ImageGrid({
             setSelectedItem(null)
             setEditName("")
             setEditMetadata({})
+            setEditRank(undefined)
           }
         }}
       >
@@ -852,6 +935,22 @@ export function ImageGrid({
                 placeholder="Enter item name"
               />
             </div>
+
+            {selectedItem && categorySupportsRanking(selectedItem.category_id) && (
+              <div className="grid gap-2">
+                <Label htmlFor="edit-rank">Rank (1-100)</Label>
+                <Input
+                  id="edit-rank"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={editRank || ""}
+                  onChange={(e) => setEditRank(e.target.value ? Number(e.target.value) : undefined)}
+                  placeholder="Enter rank position (optional)"
+                />
+                <p className="text-xs text-muted-foreground">Assign a position from 1 to 100 for your Top 100 list</p>
+              </div>
+            )}
 
             {/* Dynamic metadata fields for edit */}
             {selectedItem && getSchemaFields(selectedItem.category_id).length > 0 && (
@@ -878,6 +977,7 @@ export function ImageGrid({
                 setSelectedItem(null)
                 setEditName("")
                 setEditMetadata({})
+                setEditRank(undefined)
               }}
             >
               Cancel
