@@ -8,8 +8,7 @@ import { MobileSidebar } from "@/components/dashboard/mobile-sidebar"
 import { ImageGrid } from "@/components/dashboard/image-grid"
 import { FitnessView } from "@/components/dashboard/fitness-view"
 import { FinanceView } from "@/components/dashboard/finance-view"
-import { TodoView } from "@/components/dashboard/todo-view"
-import type { Category, Item, ItemMetadata, WorkoutLog, Transaction, Budget, SavingsGoal, Todo } from "@/lib/types"
+import type { Category, Item, ItemMetadata, WorkoutLog, Transaction, Budget, SavingsGoal } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 const supabase = createClient()
@@ -54,12 +53,6 @@ const fetchSavingsGoals = async (): Promise<SavingsGoal[]> => {
   return data || []
 }
 
-const fetchTodos = async (): Promise<Todo[]> => {
-  const { data, error } = await supabase.from("todos").select("*").order("created_at", { ascending: false })
-  if (error) throw error
-  return data || []
-}
-
 export default function DashboardPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
   const [isItemFocused, setIsItemFocused] = useState(false)
@@ -87,8 +80,6 @@ export default function DashboardPage() {
     error: goalsError,
     isLoading: goalsLoading,
   } = useSWR("savings_goals", fetchSavingsGoals)
-
-  const { data: todos = [], error: todosError, isLoading: todosLoading } = useSWR("todos", fetchTodos)
 
   // Subscribe to realtime updates
   useEffect(() => {
@@ -134,13 +125,6 @@ export default function DashboardPage() {
       })
       .subscribe()
 
-    const todosChannel = supabase
-      .channel("todos-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "todos" }, () => {
-        mutate("todos")
-      })
-      .subscribe()
-
     return () => {
       supabase.removeChannel(categoriesChannel)
       supabase.removeChannel(itemsChannel)
@@ -148,7 +132,6 @@ export default function DashboardPage() {
       supabase.removeChannel(transactionsChannel)
       supabase.removeChannel(budgetsChannel)
       supabase.removeChannel(goalsChannel)
-      supabase.removeChannel(todosChannel)
     }
   }, [])
 
@@ -191,42 +174,33 @@ export default function DashboardPage() {
     mutate("items")
   }, [])
 
-  const handleAddItem = useCallback(
-    async (categoryId: string, name: string, file: File, metadata?: ItemMetadata, rank?: number) => {
-      const fileExt = file.name.split(".").pop()
-      const fileName = ${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}
-      const filePath = ${fileName}
+  const handleAddItem = useCallback(async (categoryId: string, name: string, file: File, metadata?: ItemMetadata) => {
+    const fileExt = file.name.split(".").pop()
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+    const filePath = `${fileName}`
 
-      const { error: uploadError } = await supabase.storage.from("dashboard-images").upload(filePath, file)
-      if (uploadError) throw uploadError
+    const { error: uploadError } = await supabase.storage.from("dashboard-images").upload(filePath, file)
+    if (uploadError) throw uploadError
 
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("dashboard-images").getPublicUrl(filePath)
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("dashboard-images").getPublicUrl(filePath)
 
-      const { error } = await supabase.from("items").insert({
-        category_id: categoryId,
-        name,
-        type: "image",
-        image_url: publicUrl,
-        metadata: metadata || {},
-        rank: rank || null,
-      })
-      if (error) throw error
-      mutate("items")
-    },
-    [],
-  )
+    const { error } = await supabase.from("items").insert({
+      category_id: categoryId,
+      name,
+      type: "image",
+      image_url: publicUrl,
+      metadata: metadata || {},
+    })
+    if (error) throw error
+    mutate("items")
+  }, [])
 
-  const handleUpdateItem = useCallback(async (id: string, name: string, metadata?: ItemMetadata, rank?: number) => {
+  const handleUpdateItem = useCallback(async (id: string, name: string, metadata?: ItemMetadata) => {
     const { error } = await supabase
       .from("items")
-      .update({
-        name,
-        metadata: metadata || {},
-        rank: rank || null,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ name, metadata: metadata || {}, updated_at: new Date().toISOString() })
       .eq("id", id)
     if (error) throw error
     mutate("items")
@@ -244,11 +218,13 @@ export default function DashboardPage() {
   }, [])
 
   const handleChangeImage = useCallback(async (id: string, file: File) => {
+    // Get the current item to find the old image URL
     const { data: currentItem } = await supabase.from("items").select("image_url").eq("id", id).single()
 
+    // Upload new image
     const fileExt = file.name.split(".").pop()
-    const fileName = ${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}
-    const filePath = ${fileName}
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
+    const filePath = `${fileName}`
 
     const { error: uploadError } = await supabase.storage.from("dashboard-images").upload(filePath, file)
     if (uploadError) throw uploadError
@@ -257,12 +233,14 @@ export default function DashboardPage() {
       data: { publicUrl },
     } = supabase.storage.from("dashboard-images").getPublicUrl(filePath)
 
+    // Update the item with the new image URL
     const { error } = await supabase
       .from("items")
       .update({ image_url: publicUrl, updated_at: new Date().toISOString() })
       .eq("id", id)
     if (error) throw error
 
+    // Delete the old image from storage
     if (currentItem?.image_url) {
       const match = currentItem.image_url.match(/dashboard-images\/(.+)$/)
       if (match) {
@@ -360,42 +338,13 @@ export default function DashboardPage() {
     mutate("savings_goals")
   }, [])
 
-  const handleAddTodo = useCallback(async (todo: Omit<Todo, "id" | "created_at" | "updated_at">) => {
-    const { error } = await supabase.from("todos").insert(todo)
-    if (error) throw error
-    mutate("todos")
-  }, [])
-
-  const handleUpdateTodo = useCallback(async (id: string, todo: Partial<Todo>) => {
-    const { error } = await supabase
-      .from("todos")
-      .update({ ...todo, updated_at: new Date().toISOString() })
-      .eq("id", id)
-    if (error) throw error
-    mutate("todos")
-  }, [])
-
-  const handleDeleteTodo = useCallback(async (id: string) => {
-    const { error } = await supabase.from("todos").delete().eq("id", id)
-    if (error) throw error
-    mutate("todos")
-  }, [])
-
   const selectedCategory = selectedCategoryId ? categories.find((c) => c.id === selectedCategoryId) : null
   const isFitnessCategory = selectedCategory?.type === "fitness"
   const isFinanceCategory = selectedCategory?.type === "finance"
-  const isTodosCategory = selectedCategory?.type === "todos"
 
-  const hasError =
-    categoriesError || itemsError || workoutError || transactionsError || budgetsError || goalsError || todosError
+  const hasError = categoriesError || itemsError || workoutError || transactionsError || budgetsError || goalsError
   const isLoading =
-    categoriesLoading ||
-    itemsLoading ||
-    workoutLoading ||
-    transactionsLoading ||
-    budgetsLoading ||
-    goalsLoading ||
-    todosLoading
+    categoriesLoading || itemsLoading || workoutLoading || transactionsLoading || budgetsLoading || goalsLoading
 
   if (hasError) {
     return (
@@ -453,14 +402,7 @@ export default function DashboardPage() {
           <h1 className="text-lg font-semibold text-foreground">Dashboard</h1>
         </header>
 
-        {isTodosCategory ? (
-          <TodoView
-            todos={todos}
-            onAddTodo={handleAddTodo}
-            onUpdateTodo={handleUpdateTodo}
-            onDeleteTodo={handleDeleteTodo}
-          />
-        ) : isFinanceCategory && selectedCategoryId ? (
+        {isFinanceCategory && selectedCategoryId ? (
           <FinanceView
             categoryId={selectedCategoryId}
             transactions={transactions.filter((t) => t.category_id === selectedCategoryId)}

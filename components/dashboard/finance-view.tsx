@@ -558,11 +558,11 @@ export function FinanceView({
                         outerRadius={100}
                         paddingAngle={2}
                         dataKey="value"
-                        label={({ name, percent }) => `R{name} R{(percent * 100).toFixed(0)}%`}
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                         labelLine={false}
                       >
                         {pieData.map((entry, index) => (
-                          <Cell key={`cell-R{index}`} fill={entry.color} />
+                          <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
                       <Tooltip
@@ -603,7 +603,7 @@ export function FinanceView({
                     />
                     <Bar dataKey="savings" name="Net Savings" radius={[4, 4, 0, 0]}>
                       {monthlyData.map((entry, index) => (
-                        <Cell key={`cell-R{index}`} fill={entry.savings >= 0 ? "#22c55e" : "#ef4444"} />
+                        <Cell key={`cell-${index}`} fill={entry.savings >= 0 ? "#22c55e" : "#ef4444"} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -658,7 +658,7 @@ export function FinanceView({
                               day: "numeric",
                               year: "numeric",
                             })}
-                            {transaction.category_name && ` • R{transaction.category_name}`}
+                            {transaction.category_name && ` • ${transaction.category_name}`}
                           </p>
                         </div>
                       </div>
@@ -740,7 +740,7 @@ export function FinanceView({
                   <CardContent>
                     <Progress value={budget.percentage} className={cn("h-2", budget.over && "[&>div]:bg-red-500")} />
                     <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                      <span>{budget.over ? "Over budget" : `R{formatCurrency(budget.remaining)} remaining`}</span>
+                      <span>{budget.over ? "Over budget" : `${formatCurrency(budget.remaining)} remaining`}</span>
                       <span>{budget.percentage.toFixed(0)}%</span>
                     </div>
                   </CardContent>

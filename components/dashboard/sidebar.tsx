@@ -24,8 +24,6 @@ import {
   Briefcase,
   Wallet,
   LayoutGrid,
-  Tv,
-  CheckSquare,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -46,7 +44,6 @@ import type { Category } from "@/lib/types"
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   folder: Folder,
   film: Film,
-  tv: Tv,
   music: Music,
   "book-open": BookOpen,
   target: Target,
@@ -57,13 +54,10 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   briefcase: Briefcase,
   wallet: Wallet,
   "layout-grid": LayoutGrid,
-  "check-square": CheckSquare,
 }
 
 const TYPE_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   media: Film,
-  movies: Film,
-  tvshows: Tv,
   music: Music,
   reading: BookOpen,
   goals: Target,
@@ -73,7 +67,6 @@ const TYPE_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>>
   ideas: Lightbulb,
   career: Briefcase,
   finance: Wallet,
-  todos: CheckSquare,
   general: Folder,
 }
 
