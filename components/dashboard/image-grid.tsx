@@ -544,7 +544,7 @@ export function ImageGrid({
         <div className="mb-8 sm:mb-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-foreground">
-              {filterByMetadata ? `R{filterByMetadata.value}` : selectedCategory?.name || "All Items"}
+              {filterByMetadata ? `${filterByMetadata.value}` : selectedCategory?.name || "All Items"}
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {filteredItems.length} {filteredItems.length === 1 ? "item" : "items"}

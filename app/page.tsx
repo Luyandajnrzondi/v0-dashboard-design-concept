@@ -194,8 +194,8 @@ export default function DashboardPage() {
   const handleAddItem = useCallback(
     async (categoryId: string, name: string, file: File, metadata?: ItemMetadata, rank?: number) => {
       const fileExt = file.name.split(".").pop()
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
-      const filePath = `${fileName}`
+      const fileName = ${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}
+      const filePath = ${fileName}
 
       const { error: uploadError } = await supabase.storage.from("dashboard-images").upload(filePath, file)
       if (uploadError) throw uploadError
@@ -247,8 +247,8 @@ export default function DashboardPage() {
     const { data: currentItem } = await supabase.from("items").select("image_url").eq("id", id).single()
 
     const fileExt = file.name.split(".").pop()
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
-    const filePath = `${fileName}`
+    const fileName = ${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}
+    const filePath = ${fileName}
 
     const { error: uploadError } = await supabase.storage.from("dashboard-images").upload(filePath, file)
     if (uploadError) throw uploadError
