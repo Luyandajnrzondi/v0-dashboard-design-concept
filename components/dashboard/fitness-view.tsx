@@ -247,7 +247,7 @@ export function FitnessView({
       Running: 0,
       Yoga: 0,
       Sports: 0,
-      Swimming: 0,
+      Other: 0,
     }
 
     last30Days.forEach((w) => {
@@ -263,7 +263,7 @@ export function FitnessView({
 
     return Object.entries(typeCount).map(([type, count]) => ({
       type,
-      value: Math.round((count / maxCount) * 100),
+      value: Math.round((count / maxCount) * 75),
       count,
     }))
   }, [workoutLogs])
