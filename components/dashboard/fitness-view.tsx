@@ -263,7 +263,7 @@ export function FitnessView({
 
     return Object.entries(typeCount).map(([type, count]) => ({
       type,
-      value: Math.round((count / maxCount) * 50),
+      value: Math.round((count / maxCount) * 100),
       count,
     }))
   }, [workoutLogs])
