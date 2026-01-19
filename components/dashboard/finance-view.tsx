@@ -988,7 +988,10 @@ export function FinanceView({
             <div className="grid gap-2">
               <Label>Monthly Budget</Label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
+  R
+</span>
+
                 <Input
                   type="number"
                   step="0.01"
@@ -1031,7 +1034,10 @@ export function FinanceView({
               <div className="grid gap-2">
                 <Label>Target Amount</Label>
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
+  R
+</span>
+
                   <Input
                     type="number"
                     step="0.01"
@@ -1045,7 +1051,10 @@ export function FinanceView({
               <div className="grid gap-2">
                 <Label>Current Amount</Label>
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
+  R
+</span>
+
                   <Input
                     type="number"
                     step="0.01"
