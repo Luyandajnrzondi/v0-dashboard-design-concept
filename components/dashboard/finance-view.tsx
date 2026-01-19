@@ -13,7 +13,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Target,
-  //DollarSign,
+  DollarSign,
   Calendar,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -87,12 +87,6 @@ const EXPENSE_CATEGORIES = [
   "Personal Care",
   "Other",
 ]
-
-
-const ZARSymbol = () => (
-  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">R</span>
-)
-
 
 const PAYMENT_METHODS = ["Cash", "Debit Card", "Credit Card", "Bank Transfer", "Mobile Payment", "Other"]
 
@@ -218,7 +212,7 @@ export function FinanceView({
       const expenses = monthTransactions.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0)
 
       return {
-        month: date.toLocaleDateString("en-ZAR", { month: "short" }),
+        month: date.toLocaleDateString("en-ZA", { month: "short" }),
         income,
         expenses,
         savings: income - expenses,
@@ -659,7 +653,7 @@ export function FinanceView({
                         <div>
                           <p className="font-medium">{transaction.description}</p>
                           <p className="text-sm text-muted-foreground">
-                            {new Date(transaction.transaction_date).toLocaleDateString("en-ZAR", {
+                            {new Date(transaction.transaction_date).toLocaleDateString("en-US", {
                               month: "short",
                               day: "numeric",
                               year: "numeric",
@@ -708,7 +702,7 @@ export function FinanceView({
             <div>
               <h2 className="text-lg font-semibold">Monthly Budgets</h2>
               <p className="text-sm text-muted-foreground">
-                {new Date().toLocaleDateString("en-ZAR", { month: "long", year: "numeric" })}
+                {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
               </p>
             </div>
             <Button onClick={() => setAddBudgetOpen(true)}>
@@ -873,7 +867,10 @@ export function FinanceView({
               <div className="grid gap-2">
                 <Label>Amount</Label>
                 <div className="relative">
-                <ZARSymbol className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
+  R
+</span>
+
                   <Input
                     type="number"
                     step="0.01"
@@ -991,7 +988,7 @@ export function FinanceView({
             <div className="grid gap-2">
               <Label>Monthly Budget</Label>
               <div className="relative">
-                <ZARSymbol className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="number"
                   step="0.01"
@@ -1034,7 +1031,7 @@ export function FinanceView({
               <div className="grid gap-2">
                 <Label>Target Amount</Label>
                 <div className="relative">
-                  <ZARSymbol className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="number"
                     step="0.01"
@@ -1048,7 +1045,7 @@ export function FinanceView({
               <div className="grid gap-2">
                 <Label>Current Amount</Label>
                 <div className="relative">
-                  <ZARSymbol className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="number"
                     step="0.01"
