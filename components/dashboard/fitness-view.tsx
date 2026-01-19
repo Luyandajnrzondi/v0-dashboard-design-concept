@@ -244,7 +244,7 @@ export function FitnessView({
     const typeCount = {
       Strength: 0,
       Cardio: 0,
-      HIIT: 0,
+      Running: 0,
       Yoga: 0,
       Sports: 0,
       Other: 0,
