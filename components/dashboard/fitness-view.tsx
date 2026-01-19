@@ -247,7 +247,7 @@ export function FitnessView({
       Running: 0,
       Yoga: 0,
       Sports: 0,
-      Other: 0,
+      Swimming: 0,
     }
 
     last30Days.forEach((w) => {
